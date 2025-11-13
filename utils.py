@@ -76,7 +76,7 @@ def process_audio_project(project_folder: str, audio_dict: dict):
     pickle_path = os.path.join(out_dir, "metadata.pkl")
     with open(pickle_path, "wb") as f:
         pickle.dump(audio_dict, f)
-    audio_df = pd.DataFrame.from_dict(audio_dict, index=[0])
+    audio_df = pd.DataFrame.from_dict(audio_dict)
     audio_df.to_csv(os.path.join(out_dir, "metadata.csv"))
     print(f"✅ Project created at: {out_dir}")
     return audio_dict
