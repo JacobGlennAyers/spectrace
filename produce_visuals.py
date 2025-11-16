@@ -8,7 +8,7 @@ if __name__ == "__main__":
     
     visualize_all_projects(
         project_folder="./projects",
-        clip_basename="2023-12-03--10-15-10--Rec-C.sel.26.AA",
+        clip_basename="test",
         layer_group_name="OrcinusOrca_FrequencyContours",
         output_folder="./visualizations"
     )
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     print("Generating visualizations for a single project...")
     print("="*60)
     
-    project_path = "./projects/2023-12-03--10-15-10--Rec-C.sel.26.AA_0"
+    project_path = "./projects/test_0"
     
     # Create overlay visualization
     visualize_overlay(
