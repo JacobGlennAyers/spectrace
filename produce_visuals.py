@@ -49,7 +49,7 @@ if __name__ == "__main__":
     print("Generating visualizations for a single project...")
     print("="*60)
     
-    project_path = "./projects/test_0"
+    project_path = "./projects/orca_0"
     
     # Create overlay visualization
     visualize_overlay(
