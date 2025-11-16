@@ -1,0 +1,53 @@
+OrcinusOrca_FrequencyContours:
+    description: "Accompanying yaml file that helps explain all of the layer classes used to draw traces for Orcas"
+    author: "Pascale Hatt"
+    Heterodynes:
+        description: "Heterodynes occur above and below the high-frequency component of biphonic calls. 
+        The frequency of a heterodyne is equal to the frequency of the fundamental frequency or a harmonic of the high-frequency component plus or minus the frequency of the fundamental frequency or a harmonic of the low-frequency component.
+        This means, if you see frequency contours between harmonics of the high-frequency component and you can get the frequencies of these contours by taking the frequency of an adjacent harmonic of the high-frequency component and adding or substracting the frequency of the low-frequency component (once or twice or more times) then it is probably a heterodyne.
+        In mathematical terms: frequency(Xth heterodyne above/below high-frequency component) = frequency(high-frequency component) +/- X * frequency(fundamental frequency of low-frequency component) , X is an integer.
+        In the rest of this document, when I write about a heterodyne being 'affiliated' to a harmonic of a high-frequency component, this means that the frequency of that heterodyne can be calculated by using that harmonic of the high-frequency component.
+        For more information on heterodynes and examples, see:
+        Fig.4 in Filatova et al., 2020 (https://doi.org/10.1371/journal.pone.0236749).
+        Fig.1 in Miller et al., 2007 (https://doi.org/10.1121/1.2722056) (full paper available here: https://sci-hub.se/https://doi.org/10.1121/1.2722056).
+        This layer group contains 13 layers ('unsure', '0', '1', '2', ..., '12'). These layers are used to draw the contours of heterodynes. 
+        Below, the 'unsure' layer and the '0', '1' and '2' layers are described. Those heterodynes that are affiliated with the same contour of the high-frequency component are drawn on the same layer.
+        The layers 3-12 are not explained since it works the same as for the layers 0-2."
+        unsure:
+            description: "Catch all when a trace is a heterodyne but affiliated harmonic of high-frequency component is unknown"
+        0:
+            description: "On this layer, you label all heterodynes that are affiliated with the fundamental frequency of the high-frequency component (which is labelled on the f0_HFC layer)."
+        1:
+            description: "Heterodyne is affiliated with the 1st harmonic of the high-frequency component"
+        2:
+            description: "Heterodyne is affiliated with the 2nd harmonic of the high-frequency component"
+    Subharmonics:
+        description: "Subharmonics occur at evenly spaced intervals below the fundamental frequency and harmonics of a call. 
+        The frequency of subharmonics is equal to the fundamental frequency of a call divided by an integer (e.g. f0/2, f0/3, ...). 
+        For more information and examples, see:
+        Fig. 1 in Tyson et al., 2007 (https://doi.org/10.1121/1.2756263) (full paper available here: https://www.researchgate.net/profile/Reny-Tyson-Moore/publication/5918531_Nonlinear_phenomena_in_the_vocalizations_of_North_Atlantic_right_whales_Eubalaena_glacialis_and_killer_whales_Orcinus_orca/links/53e264970cf275a5fdd711c4/Nonlinear-phenomena-in-the-vocalizations-of-North-Atlantic-right-whales-Eubalaena-glacialis-and-killer-whales-Orcinus-orca.pdf)
+        Several figures in Wilden et al., 1998 (https://doi.org/10.1080/09524622.1998.9753394)
+        This layer group is used to label subharmonics."
+        subharmonics_HFC:
+            description: "All subharmonics of the high-frequency component"
+        subharmonics_LFC:
+            description: "All subharmonics of the low-frequency component"
+    heterodyne_or_subharmonic:
+        description: "Label contours on this layer if you are unsure whether it is a subharmonic or a heterodyne"
+    Cetacean_AdditionalContours:
+        description: "Label contours on this layer if there is ambiguity about which cetacean produced this sound"
+    harmonics_HFC:
+        description: "On this layer you label all harmonics of a high-frequency component. This layer is only used if a call is potentially biphonic.
+        Biphonic calls possess a high-frequency component and a low-frequency component which are produced simultaneously. 
+        In contrast to biphonic calls, monophonic calls only have one fundamental frequency.
+        For more information on biphonic calls and examples, see:
+        Fig. 2 in Filatova et al., 2017 (doi.org/10.1163/1568539X-00003417).
+        Fig. 2 in Filatova et al., 2009 (https://doi.org/10.1007/s10211-009-0056-7)."
+    f0_HFC:
+        description: "fundamental frequency of the high-frequency component. This layer is only used if a call is potentially biphonic."
+    harmonics_LFC:
+        description: "When annotating a biphonic call: all harmonics of the low-frequency component.
+        When annotating a monophonic call: all harmonics of the call."
+    f0_LFC:
+        description: "When annotating a biphonic call: fundamental frequency of the low-frequency component.
+        When annotating a monophonic call: fundamental frequency of the call."
