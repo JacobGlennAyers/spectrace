@@ -16,11 +16,11 @@ OrcinusOrca_FrequencyContours:
         unsure:
             description: "Catch all when a trace is a heterodyne but affiliated harmonic of high-frequency component is unknown"
         0:
-            description: "On this layer, you label all heterodynes that are affiliated with the fundamental frequency of the high-frequency component (which is labelled on the f0_HFC layer)."
+            description: "On this layer, you draw all heterodynes that are affiliated with the fundamental frequency of the high-frequency component (which is labelled on the f0_HFC layer) of a biphonic call."
         1:
-            description: "Heterodyne is affiliated with the 1st harmonic of the high-frequency component"
+            description: "Heterodyne is affiliated with the 1st harmonic of the high-frequency component of a biphonic call"
         2:
-            description: "Heterodyne is affiliated with the 2nd harmonic of the high-frequency component"
+            description: "Heterodyne is affiliated with the 2nd harmonic of the high-frequency component of a biphonic call"
     Subharmonics:
         description: "Subharmonics occur at evenly spaced intervals below the fundamental frequency and harmonics of a call. 
         The frequency of subharmonics is equal to the fundamental frequency of a call divided by an integer (e.g. f0/2, f0/3, ...). 
@@ -29,25 +29,38 @@ OrcinusOrca_FrequencyContours:
         Several figures in Wilden et al., 1998 (https://doi.org/10.1080/09524622.1998.9753394)
         This layer group is used to label subharmonics."
         subharmonics_HFC:
-            description: "All subharmonics of the high-frequency component"
+            description: "All subharmonics of the high-frequency component of a biphonic call"
         subharmonics_LFC:
-            description: "All subharmonics of the low-frequency component"
-    heterodyne_or_subharmonic:
-        description: "Label contours on this layer if you are unsure whether it is a subharmonic or a heterodyne"
+            description: "All subharmonics of a monophonic call or of the low-frequency component of a biphonic call"
+    heterodyne_or_subharmonic_or_other:
+        description: "Label contours on this layer if you are unsure whether it is a subharmonic or a heterodyne or something else that probably belongs to the call of which you are annotating frequency contours.
+        Subharmonics are something else than heterodynes but they may be difficult to distinguish in some cases. 
+        Heterodynes are sidebands but not all sidebands are heterodynes, therefore it may be unclear if a certain contour is a heterodyne."
     Cetacean_AdditionalContours:
-        description: "Label contours on this layer if there is ambiguity about which cetacean produced this sound"
+        description: "Draw contours on this layer if the vocalisation stems from a cetacean that is not an orca or if there is ambiguity about which cetacean produced this sound"
+        unsure_CetaceanAdditionalContours:
+            description: "Draw contours on this layer when you are unsure if a contour is the fundamental frequency or a harmonic"
+        harmonics_CetaceanAdditionalContours: 
+            description: "all harmonics of the vocalisation"
+        f0_CetaceanAdditionalContours:
+            description: "fundamental frequency of the vocalisation"
     harmonics_HFC:
-        description: "On this layer you label all harmonics of a high-frequency component. This layer is only used if a call is potentially biphonic.
+        description: "On this layer you label all harmonics of the high-frequency component of a biphonic call. This layer is only used if a call is potentially biphonic.
+        The frequency of a harmonic is equal to the frequency of the fundamental frequency multiplied by and integer. 
         Biphonic calls possess a high-frequency component and a low-frequency component which are produced simultaneously. 
         In contrast to biphonic calls, monophonic calls only have one fundamental frequency.
         For more information on biphonic calls and examples, see:
         Fig. 2 in Filatova et al., 2017 (doi.org/10.1163/1568539X-00003417).
         Fig. 2 in Filatova et al., 2009 (https://doi.org/10.1007/s10211-009-0056-7)."
     f0_HFC:
-        description: "fundamental frequency of the high-frequency component. This layer is only used if a call is potentially biphonic."
+        description: "fundamental frequency of the high-frequency component of a biphonic call."
+    unsure_HFC:
+        description: "Draw contours on this layer if you encounter freqency contours of a high-frequency component of a biphonic call and you are unsure if the contours are the fundamental frequency or harmonics"
     harmonics_LFC:
         description: "When annotating a biphonic call: all harmonics of the low-frequency component.
-        When annotating a monophonic call: all harmonics of the call."
+        When annotating a monophonic call or a burst for which the harmonics are discernible: all harmonics of the  or burst."
     f0_LFC:
         description: "When annotating a biphonic call: fundamental frequency of the low-frequency component.
-        When annotating a monophonic call: fundamental frequency of the call."
+        When annotating a monophonic call or a burst for which the fundamental frequency is discernible: fundamental frequency of the call."
+    unsure_LFC:
+        description: "Draw contours on this layer if you encounter freqency contours of a low-frequency component, monophonic call or burst for which the contours are discernible and you are unsure if the contours are the fundamental frequency or harmonics"
