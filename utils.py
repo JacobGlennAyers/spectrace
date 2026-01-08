@@ -67,6 +67,7 @@ def process_audio_project(project_folder: str, audio_dict: dict):
     # Save all relevant info
     audio_dict.update({
         "sample_rate": sr,
+        "noverlap" : audio_dict["nfft"] // 2,
         "spectrogram_path": spectrogram_path,
         "copied_audio_path": copied_audio_path,
         "project_folder": out_dir,
