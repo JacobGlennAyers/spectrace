@@ -121,16 +121,9 @@ This creates:
 3. Open the template file: `File > Open as Layers` → select `templates/orca_template.xcf`
 4. In the Layers panel, ensure the template layer group is above the spectrogram image
 5. Right-click the layer group → `Layer to Image Size` (ensures layers match spectrogram dimensions)
-<video
-  src="https://github.com/JacobGlennAyers/spectrace/releases/download/additional_materials/clip1.mp4"
-  controls
-  muted
-  playsinline
-  style="max-width: 100%; border-radius: 6px;">
-</video>
 
+![clip1](https://github.com/user-attachments/assets/bce3ba48-2dab-4f51-aff3-714c41f0a214)
 
-**[GIF PLACEHOLDER: Loading template and adjusting layers]**
 
 The template contains predefined layer groups for different annotation types. The included orca template (`orca_template.xcf`) is organized hierarchically to capture various acoustic features:
 
@@ -160,13 +153,9 @@ Each major category includes an "unsure" layer for cases where you cannot defini
 5. Draw along the frequency contour you wish to annotate
 6. Use the Eraser tool (same hardness/force settings) to correct mistakes
 7. Toggle layer visibility using the "eye" icon to check your work
-<video
-  src="https://github.com/JacobGlennAyers/spectrace/releases/download/additional_materials/clip2.mp4"
-  controls
-  muted
-  playsinline
-  style="max-width: 100%; border-radius: 6px;">
-</video>
+
+![clip2](https://github.com/user-attachments/assets/d68520fd-c52c-4c67-bb3c-df80050e4690)
+
 
 **Tips:**
 - Use different layers for each annotation class
@@ -181,15 +170,11 @@ Save your work as an XCF file in the project folder:
 ```
 File > Save As > projects/your_audio_file_0/your_audio_file_0.xcf
 ```
-<video
-  src="https://github.com/JacobGlennAyers/spectrace/releases/download/additional_materials/clip3.mp4"
-  controls
-  muted
-  playsinline
-  style="max-width: 100%; border-radius: 6px;">
-</video>
 
 The XCF filename should match the project folder name.
+
+![clip3](https://github.com/user-attachments/assets/5f61c7aa-3add-444f-97ea-e7e242c46f3b)
+
 
 ### 6. Visualize Your Annotations
 
