@@ -115,13 +115,20 @@ This creates:
 
 ### 3. Set Up GIMP for Annotation
 
-**[GIF PLACEHOLDER: Opening project spectrogram in GIMP]**
 
 1. Open GIMP
 2. Open the spectrogram PNG from your project folder: `projects/your_audio_file_0/your_audio_file_0_spectrogram.png`
 3. Open the template file: `File > Open as Layers` → select `templates/orca_template.xcf`
 4. In the Layers panel, ensure the template layer group is above the spectrogram image
 5. Right-click the layer group → `Layer to Image Size` (ensures layers match spectrogram dimensions)
+<video
+  src="https://github.com/USER/REPO/releases/download/additional_materials/clip1.mp4"
+  controls
+  muted
+  playsinline
+  style="max-width: 100%; border-radius: 6px;">
+</video>
+
 
 **[GIF PLACEHOLDER: Loading template and adjusting layers]**
 
@@ -144,7 +151,7 @@ Each major category includes an "unsure" layer for cases where you cannot defini
 
 ### 4. Draw Your Annotations
 
-**[GIF PLACEHOLDER: Drawing masks on spectrogram layers]**
+
 
 1. Zoom in for precision: `View > Zoom > 2:1 (200%)`
 2. Select the Pencil tool (not paintbrush)
@@ -153,6 +160,13 @@ Each major category includes an "unsure" layer for cases where you cannot defini
 5. Draw along the frequency contour you wish to annotate
 6. Use the Eraser tool (same hardness/force settings) to correct mistakes
 7. Toggle layer visibility using the "eye" icon to check your work
+<video
+  src="https://github.com/USER/REPO/releases/download/additional_materials/clip2.mp4"
+  controls
+  muted
+  playsinline
+  style="max-width: 100%; border-radius: 6px;">
+</video>
 
 **Tips:**
 - Use different layers for each annotation class
@@ -167,6 +181,13 @@ Save your work as an XCF file in the project folder:
 ```
 File > Save As > projects/your_audio_file_0/your_audio_file_0.xcf
 ```
+<video
+  src="https://github.com/USER/REPO/releases/download/additional_materials/clip3.mp4"
+  controls
+  muted
+  playsinline
+  style="max-width: 100%; border-radius: 6px;">
+</video>
 
 The XCF filename should match the project folder name.
 
