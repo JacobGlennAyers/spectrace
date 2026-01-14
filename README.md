@@ -122,7 +122,7 @@ This creates:
 4. In the Layers panel, ensure the template layer group is above the spectrogram image
 5. Right-click the layer group → `Layer to Image Size` (ensures layers match spectrogram dimensions)
 <video
-  src="https://github.com/USER/REPO/releases/download/additional_materials/clip1.mp4"
+  src="https://github.com/JacobGlennAyers/spectrace/releases/download/additional_materials/clip1.mp4"
   controls
   muted
   playsinline
@@ -161,7 +161,7 @@ Each major category includes an "unsure" layer for cases where you cannot defini
 6. Use the Eraser tool (same hardness/force settings) to correct mistakes
 7. Toggle layer visibility using the "eye" icon to check your work
 <video
-  src="https://github.com/USER/REPO/releases/download/additional_materials/clip2.mp4"
+  src="https://github.com/JacobGlennAyers/spectrace/releases/download/additional_materials/clip2.mp4"
   controls
   muted
   playsinline
@@ -182,7 +182,7 @@ Save your work as an XCF file in the project folder:
 File > Save As > projects/your_audio_file_0/your_audio_file_0.xcf
 ```
 <video
-  src="https://github.com/USER/REPO/releases/download/additional_materials/clip3.mp4"
+  src="https://github.com/JacobGlennAyers/spectrace/releases/download/additional_materials/clip3.mp4"
   controls
   muted
   playsinline
