@@ -368,9 +368,6 @@ template_xcf_path = "./templates/your_template.xcf"
 - Ensure conda environment is activated: `conda activate spectrace`
 - Reinstall environment: `conda env remove -n spectrace` then `conda env create -f environment.yml`
 
-**Issue: GIMP can't find python-fu**
-- This workflow doesn't require python-fu
-- All Python operations run outside GIMP
 
 ## File Formats
 
@@ -380,27 +377,9 @@ template_xcf_path = "./templates/your_template.xcf"
 - **Excel**: Tabular export of contour data
 - **PKL/CSV**: Project metadata
 
-## Citation
-
-If you use Spectrace in your research, please cite:
-
-[Citation information to be added]
-
-## License
-
-[Your chosen license - see LICENSE file]
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
-## Acknowledgments
 
-Spectrace was developed for the INI bioacoustics research group. Special thanks to the researchers who tested and provided feedback on the workflow.
-
-## References
-
-For more information on the acoustic features annotated with this tool:
-- Heterodynes: [relevant paper]
-- Subharmonics: [relevant paper]
-- Killer whale vocalizations: Ford (1989), [other relevant papers]
