@@ -121,10 +121,11 @@ This creates:
 
 2. **Open the template file first:**
    - Click `File > Open` in the top left corner of the GIMP window
-   - Navigate to `templates/orca_template.xcf` in your spectrace directory
+   - Navigate to `templates/orca_template.xcf` (or your own template) in your spectrace directory
    - Click "Open"
    
    This template contains all the layers you'll need to draw frequency contours.
+<img width="667" height="873" alt="image" src="https://github.com/user-attachments/assets/e28f5be5-4913-494a-9bf7-2a523b99d685" />
 
 3. **Open your spectrogram image:**
    - Click `File > Open` again (keep the template open)
@@ -138,6 +139,7 @@ This creates:
 Now you need to transfer the layer structure from the template to your spectrogram image:
 
 1. **Switch to the template tab** by clicking on it in the top row of the GIMP window
+<img width="1090" height="217" alt="image" src="https://github.com/user-attachments/assets/92683573-558d-48bc-81dd-d6edd9e3e8e6" />
 
 2. **Locate the Layers panel** (usually on the right side of the window):
    - The Layers panel is typically in the bottom-right or top-right corner
@@ -148,6 +150,7 @@ Now you need to transfer the layer structure from the template to your spectrogr
    - **Click on this layer group name** to select it
    - The selected layer will be highlighted (usually with a white or blue background)
    - **Important:** Select the layer GROUP (with a folder icon and +/- sign), not an individual layer within it
+<img width="1387" height="809" alt="image" src="https://github.com/user-attachments/assets/1b782a4f-426d-4e38-856b-5324eb9a6233" />
 
 4. **Copy the layer group:**
    - Press `Ctrl+C` (Windows/Linux) or `Cmd+C` (Mac)
@@ -155,11 +158,13 @@ Now you need to transfer the layer structure from the template to your spectrogr
    - The entire layer group structure is now copied to your clipboard
 
 5. **Switch to your spectrogram image** by clicking on its tab in the top row of the GIMP window
+<img width="1090" height="217" alt="image" src="https://github.com/user-attachments/assets/3a307c4f-5edb-4461-b1af-770e65c387da" />
 
 6. **Paste the template layers:**
    - Click `Edit > Paste as > New Layer` from the menu at the top left
    - This adds the entire layer group to your spectrogram image
-   
+<img width="817" height="975" alt="image" src="https://github.com/user-attachments/assets/bc6b3b70-1b21-46f3-bc73-6ea75729cd54" />
+
    You should now see a new layer group `OrcinusOrca_FrequencyContours copy` in your Layers panel, above your spectrogram image.
 
 #### 3.3 Resize Layers to Match Your Spectrogram
@@ -172,13 +177,15 @@ The template layers must be resized to match your spectrogram's exact dimensions
 
 2. **Resize the layers:**
    - Click `Layer > Layer to Image Size` from the menu at the top left
-   
+<img width="663" height="633" alt="image" src="https://github.com/user-attachments/assets/0425be9a-2eeb-4c85-8ec2-3d5929f265ab" />
+
 3. **Verify the resize worked:**
    - You should see a colorful dashed line (marching ants border) around the entire spectrogram image
    - **Before resizing:** This dashed line might have been smaller, offset, or not covering the whole image
    - **After resizing:** The dashed line should lie exactly on the boundaries of your spectrogram
    
    The resize operation adjusts all layers in the group to match your spectrogram's exact pixel dimensions.
+<img width="543" height="537" alt="image" src="https://github.com/user-attachments/assets/0a999559-7f7d-4d63-a53c-233efeda699a" />
 
 #### 3.4 Rename the Layer Group and Unlock Layers
 
@@ -187,6 +194,7 @@ When you pasted the template, GIMP automatically added " copy" to the layer grou
 1. **Right-click on the layer group** `OrcinusOrca_FrequencyContours copy` in the Layers panel
 
 2. **Select `Edit Layer Attributes`** from the context menu
+<img width="906" height="1473" alt="image" src="https://github.com/user-attachments/assets/aa7249d1-91e4-4659-a7cc-cb9fcfa2216d" />
 
 3. **In the dialog window that opens:**
    
@@ -206,6 +214,7 @@ When you pasted the template, GIMP automatically added " copy" to the layer grou
       - **Why this matters:** Locked layers prevent you from drawing, erasing, or making any modifications.
    
    d. **Click "OK"** to apply the changes
+<img width="719" height="634" alt="image" src="https://github.com/user-attachments/assets/07408be4-123b-48d7-ac49-89163e621e52" />
 
 #### 3.5 Verify Your Setup
 
