@@ -192,6 +192,8 @@ The template layers must be resized to match your spectrogram's exact dimensions
    The resize operation adjusts all layers in the group to match your spectrogram's exact pixel dimensions.
 <img width="987" height="495" alt="image" src="https://github.com/user-attachments/assets/4ee6ac6c-8b60-4c44-85a4-74b3d61d4e6c" />
 
+### GIF Demonstration
+![clip1](https://github.com/user-attachments/assets/12a65892-cdad-4b6c-988e-4aae47054d05)
 
 #### 3.4 Rename the Layer Group and Unlock Layers
 
@@ -319,7 +321,8 @@ Draw all contours that are within the onset and offset boundaries you entered in
 
 Click the "eye" icons next to layers to toggle visibility - this helps verify each contour is on the correct layer.
 <img width="1102" height="741" alt="image" src="https://github.com/user-attachments/assets/d4ad6337-a49b-45ec-91a8-76f3c9dd4a88" />
-
+### GIF Demonstration
+![clip2](https://github.com/user-attachments/assets/0b40cdfb-3127-425b-9b9e-8ce0af64f9a4)
 
 ### 6. Save Your Work
 
@@ -328,6 +331,10 @@ Click the "eye" icons next to layers to toggle visibility - this helps verify ea
 1. `File > Save As...` (first time) or `File > Save` / `Ctrl+S` (subsequent saves)
 2. Save the XCF file in your project folder: `projects/your_audio_file_0/your_audio_file_0.xcf`
 3. The XCF filename should match the project folder name
+
+### GIF Demonstration
+![clip3](https://github.com/user-attachments/assets/c4f07c9f-a1de-4ef9-933a-60ca48df8a0c)
+
 
 **After completing all annotations for an audio file:**
 
