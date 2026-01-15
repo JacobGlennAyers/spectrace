@@ -122,7 +122,8 @@ This creates:
 4. In the Layers panel, ensure the template layer group is above the spectrogram image
 5. Right-click the layer group → `Layer to Image Size` (ensures layers match spectrogram dimensions)
 
-![clip1](https://github.com/user-attachments/assets/bce3ba48-2dab-4f51-aff3-714c41f0a214)
+![clip1](https://github.com/user-attachments/assets/1cb22058-f5c7-4c39-b6da-50c460c6c7c2)
+
 
 
 The template contains predefined layer groups for different annotation types. The included orca template (`orca_template.xcf`) is organized hierarchically to capture various acoustic features:
@@ -154,7 +155,8 @@ Each major category includes an "unsure" layer for cases where you cannot defini
 6. Use the Eraser tool (same hardness/force settings) to correct mistakes
 7. Toggle layer visibility using the "eye" icon to check your work
 
-![clip2](https://github.com/user-attachments/assets/d68520fd-c52c-4c67-bb3c-df80050e4690)
+
+![clip2](https://github.com/user-attachments/assets/6c237915-0155-42ae-83a6-24457ee075db)
 
 
 **Tips:**
@@ -173,7 +175,8 @@ File > Save As > projects/your_audio_file_0/your_audio_file_0.xcf
 
 The XCF filename should match the project folder name.
 
-![clip3](https://github.com/user-attachments/assets/5f61c7aa-3add-444f-97ea-e7e242c46f3b)
+
+![clip3](https://github.com/user-attachments/assets/8645ad96-9bca-4de4-b0c2-042a63de46f4)
 
 
 ### 6. Visualize Your Annotations
