@@ -255,6 +255,7 @@ Your Layers panel should now show (from top to bottom):
 **Initial Setup:**
 
 1. **Zoom in for precision:** `View > Zoom > 2:1 (200%)`
+<img width="767" height="882" alt="image" src="https://github.com/user-attachments/assets/daec8555-bf92-48b1-9f40-22a1358a952c" />
 
 2. **Select the Pencil tool** (not paintbrush - this is critical!)
    - Click the pencil icon in the toolbox, OR
@@ -267,16 +268,19 @@ Your Layers panel should now show (from top to bottom):
    - **Important:** Expand "Dynamics Options"
    - Check "Apply Jitter"
    - Set Amount: `0.00`
+<img width="432" height="1112" alt="image" src="https://github.com/user-attachments/assets/ae1a5a84-03a0-4410-a1f9-a6e19e6b2bf0" />
 
 4. **Select the layer** where you want to draw (e.g., `f0_LFC` for fundamental frequency)
    - Layer groups have +/- icons - click the + to expand and see individual layers
    - Click on a specific layer to select it (not the group itself)
+<img width="1095" height="733" alt="image" src="https://github.com/user-attachments/assets/204212e2-3f17-4795-a480-9a5fabff0b70" />
 
 5. **Choose a drawing color:**
    - Click the foreground color square (upper rectangle in toolbox)
    - Select a color using the color picker, OR
    - Enter HTML notation directly (recommended for consistency)
    - Use different colors for different layers to make it easier to verify your work later
+<img width="1025" height="765" alt="image" src="https://github.com/user-attachments/assets/3e3b03ef-8255-4a87-aeae-2531b3e9f32a" />
 
 **Drawing Tips:**
 
@@ -284,6 +288,8 @@ Your Layers panel should now show (from top to bottom):
 - You don't need to press any buttons on your pen/mouse - just draw
 - Use `Ctrl+Z` to undo mistakes
 - Use the Eraser tool for corrections (same hardness/force settings: 100/100)
+<img width="391" height="709" alt="image" src="https://github.com/user-attachments/assets/f6b68cdd-4ed4-479b-b042-eafdbfdcb085" />
+
 - Make sure you're on the correct layer before erasing
 - Toggle layer visibility using the "eye" icon to check your work
 - When drawing, start with the bottom layer in the list and work upward to avoid forgetting layers
@@ -312,6 +318,8 @@ Draw all contours that are within the onset and offset boundaries you entered in
 **Checking your work:**
 
 Click the "eye" icons next to layers to toggle visibility - this helps verify each contour is on the correct layer.
+<img width="1102" height="741" alt="image" src="https://github.com/user-attachments/assets/d4ad6337-a49b-45ec-91a8-76f3c9dd4a88" />
+
 
 ### 6. Save Your Work
 
