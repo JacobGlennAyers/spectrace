@@ -115,71 +115,201 @@ This creates:
 
 ### 3. Set Up GIMP for Annotation
 
+#### 3.1 Open Your Files in GIMP
 
-1. Open GIMP
-2. Open the spectrogram PNG from your project folder: `projects/your_audio_file_0/your_audio_file_0_spectrogram.png`
-3. Open the template file: `File > Open as Layers` → select `templates/orca_template.xcf`
-4. In the Layers panel, ensure the template layer group is above the spectrogram image
-5. Right-click the layer group → `Layer to Image Size` (ensures layers match spectrogram dimensions)
+1. **Open GIMP**
 
-![clip1](https://github.com/user-attachments/assets/1cb22058-f5c7-4c39-b6da-50c460c6c7c2)
+2. **Open the template file first:**
+   - Click `File > Open` in the top left corner of the GIMP window
+   - Navigate to `templates/orca_template.xcf` in your spectrace directory
+   - Click "Open"
+   
+   This template contains all the layers you'll need to draw frequency contours.
 
+3. **Open your spectrogram image:**
+   - Click `File > Open` again (keep the template open)
+   - Navigate to `projects/your_audio_file_0/your_audio_file_0_spectrogram.png`
+   - Click "Open"
+   
+   You should now have two tabs open at the top of your GIMP window: one for the template, one for your spectrogram image.
 
+#### 3.2 Copy the Template Layers to Your Spectrogram
 
-The template contains predefined layer groups for different annotation types. The included orca template (`orca_template.xcf`) is organized hierarchically to capture various acoustic features:
+Now you need to transfer the layer structure from the template to your spectrogram image:
 
-**For Biphonic Calls** (calls with two simultaneous frequency components):
-- **High-Frequency Component (HFC)**: Fundamental frequency, harmonics, and subharmonics of the higher-pitched component
-- **Low-Frequency Component (LFC)**: Fundamental frequency, harmonics, and subharmonics of the lower-pitched component
-- **Heterodynes**: Intermodulation products that appear between harmonics (numbered layers 0-12 for different harmonic affiliations)
+1. **Switch to the template tab** by clicking on it in the top row of the GIMP window
 
-**For Monophonic Calls** (single fundamental frequency):
-- **LFC layers**: Used for the fundamental frequency and harmonics
-- **Subharmonics**: Frequencies at evenly spaced intervals below the fundamental (e.g., f0/2, f0/3)
+2. **Locate the Layers panel** (usually on the right side of the window):
+   - The Layers panel is typically in the bottom-right or top-right corner
+   - If you don't see it: `Windows > Dockable Dialogs > Layers`
 
-**Additional Categories**:
-- **Cetacean Additional Contours**: For non-orca cetacean vocalizations or ambiguous sources
-- **Heterodyne/Subharmonic/Other**: For contours where classification is uncertain
+3. **Select the layer group** in the Layers panel:
+   - Look for the layer group named `OrcinusOrca_FrequencyContours`
+   - **Click on this layer group name** to select it
+   - The selected layer will be highlighted (usually with a white or blue background)
+   - **Important:** Select the layer GROUP (with a folder icon and +/- sign), not an individual layer within it
 
-Each major category includes an "unsure" layer for cases where you cannot definitively classify a contour. See `templates/orca_template.yaml` for detailed descriptions of each layer, including references to scientific papers with examples.
+4. **Copy the layer group:**
+   - Press `Ctrl+C` (Windows/Linux) or `Cmd+C` (Mac)
+   - OR: Click `Edit > Copy` from the menu
+   - The entire layer group structure is now copied to your clipboard
+
+5. **Switch to your spectrogram image** by clicking on its tab in the top row of the GIMP window
+
+6. **Paste the template layers:**
+   - Click `Edit > Paste as > New Layer` from the menu at the top left
+   - This adds the entire layer group to your spectrogram image
+   
+   You should now see a new layer group `OrcinusOrca_FrequencyContours copy` in your Layers panel, above your spectrogram image.
+
+#### 3.3 Resize Layers to Match Your Spectrogram
+
+**⚠️ CRITICAL STEP - DO NOT SKIP!**
+
+The template layers must be resized to match your spectrogram's exact dimensions, or your annotations will be cropped, misaligned, or the wrong size entirely.
+
+1. **Make sure the pasted layer group is still selected** (it should be highlighted in the Layers panel)
+
+2. **Resize the layers:**
+   - Click `Layer > Layer to Image Size` from the menu at the top left
+   
+3. **Verify the resize worked:**
+   - You should see a colorful dashed line (marching ants border) around the entire spectrogram image
+   - **Before resizing:** This dashed line might have been smaller, offset, or not covering the whole image
+   - **After resizing:** The dashed line should lie exactly on the boundaries of your spectrogram
+   
+   The resize operation adjusts all layers in the group to match your spectrogram's exact pixel dimensions.
+
+#### 3.4 Rename the Layer Group and Unlock Layers
+
+When you pasted the template, GIMP automatically added " copy" to the layer group name and locked the layers. You need to fix both issues:
+
+1. **Right-click on the layer group** `OrcinusOrca_FrequencyContours copy` in the Layers panel
+
+2. **Select `Edit Layer Attributes`** from the context menu
+
+3. **In the dialog window that opens:**
+   
+   a. **Remove " copy" from the Layer name:**
+      - You should be on the "Properties" tab (default)
+      - In the **Layer name** field, delete " copy" (including the space before it)
+      - The field should now show: `OrcinusOrca_FrequencyContours`
+      - **Why this matters:** The Python scripts expect an exact layer name match. The " copy" suffix will cause the scripts to fail.
+   
+   b. **Click on the "Switches" tab** at the top of the dialog
+   
+   c. **Uncheck all three lock options:**
+      - [ ] Lock pixels
+      - [ ] Lock position and size
+      - [ ] Lock alpha
+      - All three checkboxes should be empty
+      - **Why this matters:** Locked layers prevent you from drawing, erasing, or making any modifications.
+   
+   d. **Click "OK"** to apply the changes
+
+#### 3.5 Verify Your Setup
+
+Your Layers panel should now show (from top to bottom):
+
+```
+👁 OrcinusOrca_FrequencyContours  ← (no " copy"!)
+    Click the + to expand and see sublayers:
+    👁 Heterodynes
+    👁 Subharmonics  
+    👁 heterodyne_or_subharmonic_or_other
+    👁 Cetacean_AdditionalContours
+    👁 harmonics_HFC
+    👁 f0_HFC
+    👁 unsure_HFC
+    👁 harmonics_LFC
+    👁 f0_LFC
+    👁 unsure_LFC
+👁 your_audio_file_0_spectrogram.png  ← (your spectrogram)
+```
+
+- The `OrcinusOrca_FrequencyContours` group should be **above** your spectrogram layer
+- If it's below, drag and drop it to move it above the spectrogram
+- You should **not** see any lock icons next to the layer name
+
+**You're now ready to start drawing!**
 
 ### 4. Draw Your Annotations
 
+**Initial Setup:**
 
+1. **Zoom in for precision:** `View > Zoom > 2:1 (200%)`
 
-1. Zoom in for precision: `View > Zoom > 2:1 (200%)`
-2. Select the Pencil tool (not paintbrush)
-3. Set brush size to 1.0 pixel, hardness 100, force 100
-4. Click on the layer where you want to draw (e.g., `f0_LFC` for fundamental frequency)
-5. Draw along the frequency contour you wish to annotate
-6. Use the Eraser tool (same hardness/force settings) to correct mistakes
-7. Toggle layer visibility using the "eye" icon to check your work
+2. **Select the Pencil tool** (not paintbrush - this is critical!)
+   - Click the pencil icon in the toolbox, OR
+   - `Tools > Paint Tools > Pencil`
 
+3. **Configure tool settings:**
+   - Size: `1.0` pixel
+   - Hardness: `100`
+   - Force: `100`
+   - **Important:** Expand "Dynamics Options"
+   - Check "Apply Jitter"
+   - Set Amount: `0.00`
 
-![clip2](https://github.com/user-attachments/assets/6c237915-0155-42ae-83a6-24457ee075db)
+4. **Select the layer** where you want to draw (e.g., `f0_LFC` for fundamental frequency)
+   - Layer groups have +/- icons - click the + to expand and see individual layers
+   - Click on a specific layer to select it (not the group itself)
 
+5. **Choose a drawing color:**
+   - Click the foreground color square (upper rectangle in toolbox)
+   - Select a color using the color picker, OR
+   - Enter HTML notation directly (recommended for consistency)
+   - Use different colors for different layers to make it easier to verify your work later
 
-**Tips:**
-- Use different layers for each annotation class
-- Draw on the correct layer for each type of acoustic feature
-- Keep annotations within the time boundaries of the vocalization
-- Save frequently: `File > Save` or `Ctrl+S`
+**Drawing Tips:**
 
-### 5. Save and Export
+- Draw along the frequency contour you wish to annotate
+- You don't need to press any buttons on your pen/mouse - just draw
+- Use `Ctrl+Z` to undo mistakes
+- Use the Eraser tool for corrections (same hardness/force settings: 100/100)
+- Make sure you're on the correct layer before erasing
+- Toggle layer visibility using the "eye" icon to check your work
+- When drawing, start with the bottom layer in the list and work upward to avoid forgetting layers
 
-Save your work as an XCF file in the project folder:
+**What to Draw:**
 
-```
-File > Save As > projects/your_audio_file_0/your_audio_file_0.xcf
-```
+Draw all contours that are within the onset and offset boundaries you entered in your spreadsheet:
+- If multiple calls from the **same vocalization** are present → draw them all in one project
+- If calls from **different individuals/vocalizations** are present → create separate projects for each
 
-The XCF filename should match the project folder name.
+### 5. Managing Layers and Corrections
 
+**If you drew on the wrong layer:**
 
-![clip3](https://github.com/user-attachments/assets/8645ad96-9bca-4de4-b0c2-042a63de46f4)
+1. Click on the layer with incorrect contours
+2. Zoom out: `View > Zoom > 1:1 (100%)`
+3. Select the Rectangle Select tool
+4. Draw a rectangle around the contours to copy
+5. Press `Ctrl+C` to copy
+6. Click on the correct destination layer
+7. Press `Ctrl+V` to paste
+8. A "Floating Selection (Pasted Layer)" will appear - position it above the target layer if needed (drag and drop)
+9. Right-click "Floating Selection (Pasted Layer)" → `Anchor Layer`
+10. Erase any unwanted contours from the original or destination layer
 
+**Checking your work:**
 
-### 6. Visualize Your Annotations
+Click the "eye" icons next to layers to toggle visibility - this helps verify each contour is on the correct layer.
+
+### 6. Save Your Work
+
+**Save frequently during annotation:**
+
+1. `File > Save As...` (first time) or `File > Save` / `Ctrl+S` (subsequent saves)
+2. Save the XCF file in your project folder: `projects/your_audio_file_0/your_audio_file_0.xcf`
+3. The XCF filename should match the project folder name
+
+**After completing all annotations for an audio file:**
+
+- If you need to annotate more calls from the same audio file → return to Step 2 and create a new project
+- If all annotations are complete → proceed to visualization (Step 7)
+
+### 7. Visualize Your Annotations
 
 Open `produce_visuals.py` and specify your audio file basename:
 
@@ -361,13 +491,28 @@ template_xcf_path = "./templates/your_template.xcf"
 
 ## Troubleshooting
 
-**Issue: Layers don't match spectrogram size**
-- Solution: Right-click layer group → `Layer to Image Size`
+**Issue: Template layer group has " copy" suffix and layers are locked**
+- Solution: Follow Step 3.4 carefully - rename the layer group to remove " copy" and uncheck all three lock options in the Switches tab
+
+**Issue: Annotations are cropped, misaligned, or not appearing correctly**
+- **This is the most common issue!** 
+- Solution: You likely skipped Step 3.3 - Right-click layer group → `Layer to Image Size`
+- This step is **mandatory** for every project - layers must match spectrogram dimensions exactly
+- Verify: The colorful dashed border should perfectly outline your entire spectrogram
 
 **Issue: Pencil not drawing**
 - Check tool settings: Size=1.0, Hardness=100, Force=100
+- Verify Apply Jitter is checked with Amount=0.00
 - Ensure you've selected the Pencil tool (not Paintbrush)
 - Verify you've clicked on a layer (not layer group)
+- Check that layers are unlocked (no lock icons in Layers panel)
+
+**Issue: "I don't see the dashed border around my image"**
+- The layer group might not be selected. Click on `OrcinusOrca_FrequencyContours` in the Layers panel
+- The border (marching ants) appears when a layer is selected
+
+**Issue: "Where is the Layers panel?"**
+- Go to `Windows > Dockable Dialogs > Layers` to make it visible
 
 **Issue: Colors look wrong in visualizations**
 - Delete `layer_color_mapping.json` to regenerate color assignments
@@ -377,7 +522,6 @@ template_xcf_path = "./templates/your_template.xcf"
 - Ensure conda environment is activated: `conda activate spectrace`
 - Reinstall environment: `conda env remove -n spectrace` then `conda env create -f environment.yml`
 
-
 ## File Formats
 
 - **XCF**: GIMP's native format, stores all layers and metadata
@@ -386,9 +530,6 @@ template_xcf_path = "./templates/your_template.xcf"
 - **Excel**: Tabular export of contour data
 - **PKL/CSV**: Project metadata
 
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
-
-
