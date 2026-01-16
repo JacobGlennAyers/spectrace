@@ -22,3 +22,5 @@ dependencies:
   - pip
   - ipykernel
   - ipywidgets
+  - pip:
+    - gimpformats
