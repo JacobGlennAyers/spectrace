@@ -9,11 +9,44 @@ import numpy as np
 from datetime import datetime
 import pandas as pd
 from PIL import Image
-from gimpformats.gimpXcfDocument import GimpDocument, GimpGroup
 import matplotlib.patches as mpatches
 from typing import List, Dict, Optional, Set
 import json
 import traceback
+
+# Patch gimpformats for Windows compatibility BEFORE importing
+def patch_gimpformats():
+    """Monkey-patch gimpformats to handle unknown property values on Windows"""
+    try:
+        import gimpformats.GimpIOBase as GimpIOBase
+        from gimpformats.GimpImageHierarchy import ImageProperties
+        
+        # Save the original function
+        original_prop_cmp = GimpIOBase._prop_cmp
+        
+        def safe_prop_cmp(val, prop):
+            """Safe version that handles out-of-range property values"""
+            try:
+                return original_prop_cmp(val, prop)
+            except (IndexError, ValueError):
+                # If property value is out of range, just return False
+                # This allows the XCF to load even with unknown properties
+                return False
+        
+        # Replace the function
+        GimpIOBase._prop_cmp = safe_prop_cmp
+        print("✅ Applied gimpformats compatibility patch for Windows")
+        return True
+        
+    except Exception as e:
+        print(f"⚠️  Warning: Could not apply gimpformats patch: {e}")
+        print("    XCF files may not load correctly on Windows")
+        return False
+
+# Apply the patch before importing GimpDocument
+patch_gimpformats()
+
+from gimpformats.gimpXcfDocument import GimpDocument, GimpGroup
 
 
 def process_audio_project(project_folder: str, audio_dict: dict):
