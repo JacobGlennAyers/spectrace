@@ -34,16 +34,34 @@ This tool is particularly useful for creating training datasets for machine lear
 
 **GIMP Installation:**
 
+⚠️ **IMPORTANT: You must install GIMP version 2.10.x** - The `gimpformats` Python library used by Spectrace is only compatible with GIMP 2.10 and will not work with GIMP 3.0 or later versions.
+
 *Linux (Ubuntu/Debian):*
 ```bash
 sudo apt update
-sudo apt install gimp
+sudo apt install gimp=2.10.*
+```
+
+If GIMP 2.10 is not available in your distribution's repositories, you can use Flatpak:
+```bash
+flatpak install flathub org.gimp.GIMP//2.10
+flatpak run org.gimp.GIMP//2.10
 ```
 
 *Windows:*
-1. Download GIMP from [https://www.gimp.org/downloads/](https://www.gimp.org/downloads/)
-2. Run the installer and follow the installation wizard
+1. Download GIMP 2.10.30 from this [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) (includes both Windows installer and source code)
+   - Alternative: Download from [FossHub GIMP archive](https://www.fosshub.com/GIMP-old.html)
+2. Run the installer (`gimp-2.10.30-setup.exe`) and follow the installation wizard
 3. Accept default settings unless you have specific preferences
+4. **Do not upgrade to GIMP 3.0** if prompted - this will break compatibility with Spectrace
+
+*macOS:*
+```bash
+# Using Homebrew with version pinning
+brew install gimp@2.10
+```
+
+If Homebrew doesn't have GIMP 2.10 available, download from the [Spectrace releases page](https://github.com/yourusername/spectrace/releases) or [FossHub archive](https://www.fosshub.com/GIMP-old.html).
 
 ### Setting Up Spectrace
 
@@ -63,7 +81,7 @@ This will install all required Python dependencies including:
 - librosa (audio processing)
 - numpy, pandas (data manipulation)
 - matplotlib (visualization)
-- gimpformats (reading GIMP XCF files)
+- gimpformats (reading GIMP XCF files - **v2.10 only**)
 - h5py (HDF5 file handling)
 - pillow (image processing)
 
@@ -117,7 +135,7 @@ This creates:
 
 #### 3.1 Open Your Files in GIMP
 
-1. **Open GIMP**
+1. **Open GIMP 2.10**
 
 2. **Open the template file first:**
    - Click `File > Open` in the top left corner of the GIMP window
@@ -511,7 +529,7 @@ The `demos/` folder includes examples of common binary morphology operations (er
 
 To create your own annotation template:
 
-1. Create a new XCF file in GIMP
+1. Create a new XCF file in GIMP 2.10
 2. Set up your layer groups with descriptive names
 3. Save as `templates/your_template.xcf`
 4. Create a corresponding YAML file documenting each layer's purpose
@@ -521,7 +539,14 @@ layer_group_name = "YourSpecies_FrequencyContours"
 template_xcf_path = "./templates/your_template.xcf"
 ```
 
+**Note:** Templates created in GIMP 2.10 must be used exclusively with GIMP 2.10. Do not open or save them in GIMP 3.0, as this will make them incompatible with the `gimpformats` library.
+
 ## Troubleshooting
+
+**Issue: "gimpformats library can't read my XCF file"**
+- **Most common cause:** You're using GIMP 3.0 or have opened/saved the file in GIMP 3.0
+- Solution: Use GIMP 2.10.x exclusively. If a file was saved in GIMP 3.0, you may need to recreate it from scratch in GIMP 2.10
+- Verification: Check your GIMP version with `Help > About` in GIMP
 
 **Issue: Template layer group has " copy" suffix and layers are locked**
 - Solution: Follow Step 3.4 carefully - rename the layer group to remove " copy" and uncheck all three lock options in the Switches tab
@@ -554,9 +579,16 @@ template_xcf_path = "./templates/your_template.xcf"
 - Ensure conda environment is activated: `conda activate spectrace`
 - Reinstall environment: `conda env remove -n spectrace` then `conda env create -f environment.yml`
 
+## Compatibility Notes
+
+- **GIMP Version:** Spectrace requires GIMP 2.10.x and is **not compatible** with GIMP 3.0 or later
+- **Python:** Tested with Python 3.8-3.11
+- **Operating Systems:** Linux, Windows, and macOS
+- **gimpformats library:** Only supports GIMP 2.10 XCF file format
+
 ## File Formats
 
-- **XCF**: GIMP's native format, stores all layers and metadata
+- **XCF**: GIMP's native format (v2.10), stores all layers and metadata
 - **HDF5**: Hierarchical data format for ML pipelines
 - **PNG**: Visualization outputs
 - **Excel**: Tabular export of contour data

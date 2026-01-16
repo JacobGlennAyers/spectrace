@@ -7,15 +7,15 @@ from utils import (
 
 if __name__ == "__main__":
     # Configuration
-    project_folder = "./projects"
+    project_folder = "projects"
     clip_basename = "orca"
     layer_group_name = "OrcinusOrca_FrequencyContours"
-    output_folder = "./visualizations"
+    output_folder = "visualizations"
     
     # Path to your master template XCF file (optional but recommended)
     # This file should contain all possible layer definitions for your species
     # Leave as None to auto-discover layers from all project XCF files instead
-    template_xcf_path = "./templates/orca_template.xcf"  # or None
+    template_xcf_path = "templates/orca_template.xcf"  # or None
     
     # Step 1: Automatically discover layers and create/load color mapping
     # If template_xcf_path is provided, it reads layers from that master template
