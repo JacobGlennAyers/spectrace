@@ -541,10 +541,23 @@ def visualize_overlay(project_path: str, layer_group_name: str = "OrcinusOrca_Fr
         output_path (str, optional): Where to save the output image
         color_mapping (Dict[str, str], optional): Mapping of layer names to colors
     """
-    # Find spectrogram and XCF files
+    # Find spectrogram and XCF files with better error handling
     files = os.listdir(project_path)
-    spectrogram_file = [f for f in files if f.endswith('_spectrogram.png')][0]
-    xcf_file = [f for f in files if f.endswith('.xcf')][0]
+    print(f"📁 Files in {project_path}:")
+    for f in files:
+        print(f"   - {f}")
+    
+    # Case-insensitive search for spectrogram
+    spectrogram_files = [f for f in files if f.lower().endswith('_spectrogram.png')]
+    if not spectrogram_files:
+        raise FileNotFoundError(f"No spectrogram file (*_spectrogram.png) found in {project_path}")
+    spectrogram_file = spectrogram_files[0]
+    
+    # Case-insensitive search for XCF
+    xcf_files = [f for f in files if f.lower().endswith('.xcf')]
+    if not xcf_files:
+        raise FileNotFoundError(f"No XCF file (*.xcf) found in {project_path}")
+    xcf_file = xcf_files[0]
     
     spectrogram_path = os.path.join(project_path, spectrogram_file)
     xcf_path = os.path.join(project_path, xcf_file)
@@ -671,10 +684,23 @@ def visualize_individual_layers(project_path: str, layer_group_name: str = "Orci
         output_path (str, optional): Where to save the output image
         color_mapping (Dict[str, str], optional): Mapping of layer names to colors
     """
-    # Find spectrogram and XCF files
+    # Find spectrogram and XCF files with better error handling
     files = os.listdir(project_path)
-    spectrogram_file = [f for f in files if f.endswith('_spectrogram.png')][0]
-    xcf_file = [f for f in files if f.endswith('.xcf')][0]
+    print(f"📁 Files in {project_path}:")
+    for f in files:
+        print(f"   - {f}")
+    
+    # Case-insensitive search for spectrogram
+    spectrogram_files = [f for f in files if f.lower().endswith('_spectrogram.png')]
+    if not spectrogram_files:
+        raise FileNotFoundError(f"No spectrogram file (*_spectrogram.png) found in {project_path}")
+    spectrogram_file = spectrogram_files[0]
+    
+    # Case-insensitive search for XCF
+    xcf_files = [f for f in files if f.lower().endswith('.xcf')]
+    if not xcf_files:
+        raise FileNotFoundError(f"No XCF file (*.xcf) found in {project_path}")
+    xcf_file = xcf_files[0]
     
     spectrogram_path = os.path.join(project_path, spectrogram_file)
     xcf_path = os.path.join(project_path, xcf_file)
@@ -896,4 +922,3 @@ def visualize_all_projects_in_folder(project_folder: str,
     print(f"\n{'='*60}")
     print(f"✅ All visualizations complete!")
     print(f"{'='*60}")
-
