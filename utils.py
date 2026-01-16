@@ -13,6 +13,7 @@ from gimpformats.gimpXcfDocument import GimpDocument, GimpGroup
 import matplotlib.patches as mpatches
 from typing import List, Dict, Optional, Set
 import json
+import traceback
 
 
 def process_audio_project(project_folder: str, audio_dict: dict):
@@ -541,136 +542,145 @@ def visualize_overlay(project_path: str, layer_group_name: str = "OrcinusOrca_Fr
         output_path (str, optional): Where to save the output image
         color_mapping (Dict[str, str], optional): Mapping of layer names to colors
     """
-    # Find spectrogram and XCF files with better error handling
-    files = os.listdir(project_path)
-    print(f"📁 Files in {project_path}:")
-    for f in files:
-        print(f"   - {f}")
-    
-    # Case-insensitive search for spectrogram
-    spectrogram_files = [f for f in files if f.lower().endswith('_spectrogram.png')]
-    if not spectrogram_files:
-        raise FileNotFoundError(f"No spectrogram file (*_spectrogram.png) found in {project_path}")
-    spectrogram_file = spectrogram_files[0]
-    
-    # Case-insensitive search for XCF
-    xcf_files = [f for f in files if f.lower().endswith('.xcf')]
-    if not xcf_files:
-        raise FileNotFoundError(f"No XCF file (*.xcf) found in {project_path}")
-    xcf_file = xcf_files[0]
-    
-    spectrogram_path = os.path.join(project_path, spectrogram_file)
-    xcf_path = os.path.join(project_path, xcf_file)
-    
-    # Load metadata for time/frequency info
-    metadata = load_metadata(project_path)
-    
-    print(f"\n📊 Loading spectrogram: {spectrogram_file}")
-    
-    # Load spectrogram
-    spectrogram = Image.open(spectrogram_path)
-    spec_array = np.array(spectrogram)
-    print(f"Spectrogram shape: {spec_array.shape}")
-    
-    # Extract layers
-    layer_data = extract_layers_from_xcf(xcf_path, layer_group_name)
-    layers = layer_data['layers']
-    
-    if not layers:
-        print("⚠️  No layers found! Cannot create visualization.")
-        return
-    
-    # Use provided color mapping or generate default colors
-    if color_mapping is None:
-        layer_names = list(layers.keys())
-        colors = generate_distinct_colors(len(layer_names))
-        color_mapping = dict(zip(layer_names, colors))
-    
-    # Create figure with proper axes
-    fig, ax = plt.subplots(figsize=(14, 8))
-    
-    # Get audio parameters from metadata
-    sr = metadata.get('sample_rate', 44100)
-    nfft = metadata.get('nfft', 2048)
-    
-    # Compute time and frequency parameters
-    duration = spec_array.shape[1] * librosa.frames_to_time(1, sr=sr, n_fft=nfft)
-    max_freq = sr / 2
-    
-    # Display spectrogram with proper extent
-    ax.imshow(spec_array, aspect='auto', cmap='gray', origin='upper',
-              extent=[0, duration, 0, max_freq])
-    
-    # Overlay each layer
-    legend_handles = []
-    layers_drawn = 0
-    
-    for layer_name, layer_info in layers.items():
-        if not layer_info['visible']:
-            print(f"⏭️  Skipping invisible layer: {layer_name}")
-            continue
+    try:
+        # Find spectrogram and XCF files with better error handling
+        files = os.listdir(project_path)
+        print(f"📁 Files in {project_path}:")
+        for f in files:
+            print(f"   - {f}")
         
-        # Get the binary mask
-        mask = layer_info['mask']
+        # Case-insensitive search for spectrogram
+        spectrogram_files = [f for f in files if f.lower().endswith('_spectrogram.png')]
+        if not spectrogram_files:
+            raise FileNotFoundError(f"No spectrogram file (*_spectrogram.png) found in {project_path}")
+        spectrogram_file = spectrogram_files[0]
         
-        if np.sum(mask) == 0:
-            print(f"⚠️  Layer '{layer_name}' has no drawn pixels, skipping")
-            continue
+        # Case-insensitive search for XCF
+        xcf_files = [f for f in files if f.lower().endswith('.xcf')]
+        if not xcf_files:
+            raise FileNotFoundError(f"No XCF file (*.xcf) found in {project_path}")
+        xcf_file = xcf_files[0]
         
-        # Get color from mapping, fallback to white if not found
-        color = color_mapping.get(layer_name, '#FFFFFF')
+        spectrogram_path = os.path.join(project_path, spectrogram_file)
+        xcf_path = os.path.join(project_path, xcf_file)
         
-        # Ensure mask matches spectrogram dimensions
-        if mask.shape != spec_array.shape[:2]:
-            print(f"⚠️  Layer mask shape {mask.shape} doesn't match spectrogram {spec_array.shape[:2]}")
-            from scipy.ndimage import zoom
-            scale_y = spec_array.shape[0] / mask.shape[0]
-            scale_x = spec_array.shape[1] / mask.shape[1]
-            mask = zoom(mask, (scale_y, scale_x), order=0) > 0.5
-            print(f"    Resized mask to {mask.shape}")
+        # Load metadata for time/frequency info
+        metadata = load_metadata(project_path)
         
-        # Create colored overlay from mask
-        color_rgb = np.array([int(color[i:i+2], 16) for i in (1, 3, 5)]) / 255.0
+        print(f"\n📊 Loading spectrogram: {spectrogram_file}")
         
-        # Create RGBA overlay: RGB from color, Alpha from mask
-        overlay = np.zeros((*mask.shape, 4))
-        overlay[:, :, :3] = color_rgb
-        overlay[:, :, 3] = mask.astype(float) * 0.8
+        # Load spectrogram
+        spectrogram = Image.open(spectrogram_path)
+        spec_array = np.array(spectrogram)
+        print(f"Spectrogram shape: {spec_array.shape}")
         
-        ax.imshow(overlay, aspect='auto', origin='upper', 
+        # Extract layers
+        layer_data = extract_layers_from_xcf(xcf_path, layer_group_name)
+        layers = layer_data['layers']
+        
+        if not layers:
+            print("⚠️  No layers found! Cannot create visualization.")
+            return
+        
+        # Use provided color mapping or generate default colors
+        if color_mapping is None:
+            layer_names = list(layers.keys())
+            colors = generate_distinct_colors(len(layer_names))
+            color_mapping = dict(zip(layer_names, colors))
+        
+        # Create figure with proper axes
+        fig, ax = plt.subplots(figsize=(14, 8))
+        
+        # Get audio parameters from metadata
+        sr = metadata.get('sample_rate', 44100)
+        nfft = metadata.get('nfft', 2048)
+        
+        # Compute time and frequency parameters
+        duration = spec_array.shape[1] * librosa.frames_to_time(1, sr=sr, n_fft=nfft)
+        max_freq = sr / 2
+        
+        # Display spectrogram with proper extent
+        ax.imshow(spec_array, aspect='auto', cmap='gray', origin='upper',
                   extent=[0, duration, 0, max_freq])
         
-        # Add to legend
-        legend_handles.append(mpatches.Patch(color=color, label=layer_name))
-        layers_drawn += 1
-        print(f"✅ Drew layer '{layer_name}' ({np.sum(mask)} pixels)")
-    
-    print(f"\n✅ Successfully drew {layers_drawn} layers")
-    
-    # Add legend outside plot area
-    if legend_handles:
-        ax.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1.02, 1), 
-                  framealpha=0.9, fontsize=10)
-    
-    # Set labels and title
-    ax.set_xlabel('Time (s)', fontsize=12)
-    ax.set_ylabel('Frequency (Hz)', fontsize=12)
-    
-    title = f"Overlaid Layers ({layers_drawn} layers)"
-    if project_index is not None:
-        title += f" (Project Index: {project_index})"
-    ax.set_title(title, fontsize=14, pad=10)
-    
-    plt.tight_layout()
-    
-    # Save or show
-    if output_path:
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        print(f"✅ Overlay visualization saved to: {output_path}")
-    else:
-        plt.show()
-    
-    plt.close()
+        # Overlay each layer
+        legend_handles = []
+        layers_drawn = 0
+        
+        for layer_name, layer_info in layers.items():
+            if not layer_info['visible']:
+                print(f"⏭️  Skipping invisible layer: {layer_name}")
+                continue
+            
+            # Get the binary mask
+            mask = layer_info['mask']
+            
+            if np.sum(mask) == 0:
+                print(f"⚠️  Layer '{layer_name}' has no drawn pixels, skipping")
+                continue
+            
+            # Get color from mapping, fallback to white if not found
+            color = color_mapping.get(layer_name, '#FFFFFF')
+            
+            # Ensure mask matches spectrogram dimensions
+            if mask.shape != spec_array.shape[:2]:
+                print(f"⚠️  Layer mask shape {mask.shape} doesn't match spectrogram {spec_array.shape[:2]}")
+                from scipy.ndimage import zoom
+                scale_y = spec_array.shape[0] / mask.shape[0]
+                scale_x = spec_array.shape[1] / mask.shape[1]
+                mask = zoom(mask, (scale_y, scale_x), order=0) > 0.5
+                print(f"    Resized mask to {mask.shape}")
+            
+            # Create colored overlay from mask
+            color_rgb = np.array([int(color[i:i+2], 16) for i in (1, 3, 5)]) / 255.0
+            
+            # Create RGBA overlay: RGB from color, Alpha from mask
+            overlay = np.zeros((*mask.shape, 4))
+            overlay[:, :, :3] = color_rgb
+            overlay[:, :, 3] = mask.astype(float) * 0.8
+            
+            ax.imshow(overlay, aspect='auto', origin='upper', 
+                      extent=[0, duration, 0, max_freq])
+            
+            # Add to legend
+            legend_handles.append(mpatches.Patch(color=color, label=layer_name))
+            layers_drawn += 1
+            print(f"✅ Drew layer '{layer_name}' ({np.sum(mask)} pixels)")
+        
+        print(f"\n✅ Successfully drew {layers_drawn} layers")
+        
+        # Add legend outside plot area
+        if legend_handles:
+            ax.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1.02, 1), 
+                      framealpha=0.9, fontsize=10)
+        
+        # Set labels and title
+        ax.set_xlabel('Time (s)', fontsize=12)
+        ax.set_ylabel('Frequency (Hz)', fontsize=12)
+        
+        title = f"Overlaid Layers ({layers_drawn} layers)"
+        if project_index is not None:
+            title += f" (Project Index: {project_index})"
+        ax.set_title(title, fontsize=14, pad=10)
+        
+        plt.tight_layout()
+        
+        # Save or show
+        if output_path:
+            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            print(f"✅ Overlay visualization saved to: {output_path}")
+        else:
+            plt.show()
+        
+        plt.close()
+        
+    except Exception as e:
+        print(f"❌ Detailed error in visualize_overlay:")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   Error message: {str(e)}")
+        print(f"   Traceback:")
+        traceback.print_exc()
+        raise
 
 
 def visualize_individual_layers(project_path: str, layer_group_name: str = "OrcinusOrca_FrequencyContours",
@@ -684,123 +694,132 @@ def visualize_individual_layers(project_path: str, layer_group_name: str = "Orci
         output_path (str, optional): Where to save the output image
         color_mapping (Dict[str, str], optional): Mapping of layer names to colors
     """
-    # Find spectrogram and XCF files with better error handling
-    files = os.listdir(project_path)
-    print(f"📁 Files in {project_path}:")
-    for f in files:
-        print(f"   - {f}")
-    
-    # Case-insensitive search for spectrogram
-    spectrogram_files = [f for f in files if f.lower().endswith('_spectrogram.png')]
-    if not spectrogram_files:
-        raise FileNotFoundError(f"No spectrogram file (*_spectrogram.png) found in {project_path}")
-    spectrogram_file = spectrogram_files[0]
-    
-    # Case-insensitive search for XCF
-    xcf_files = [f for f in files if f.lower().endswith('.xcf')]
-    if not xcf_files:
-        raise FileNotFoundError(f"No XCF file (*.xcf) found in {project_path}")
-    xcf_file = xcf_files[0]
-    
-    spectrogram_path = os.path.join(project_path, spectrogram_file)
-    xcf_path = os.path.join(project_path, xcf_file)
-    
-    # Load metadata for time/frequency info
-    metadata = load_metadata(project_path)
-    
-    print(f"\n📊 Loading spectrogram: {spectrogram_file}")
-    
-    # Load spectrogram
-    spectrogram = Image.open(spectrogram_path)
-    spec_array = np.array(spectrogram)
-    
-    # Extract layers
-    layer_data = extract_layers_from_xcf(xcf_path, layer_group_name)
-    layers = layer_data['layers']
-    
-    if not layers:
-        print("⚠️  No layers found! Cannot create visualization.")
-        return
-    
-    # Use provided color mapping or generate default colors
-    if color_mapping is None:
-        layer_names = list(layers.keys())
-        colors = generate_distinct_colors(len(layer_names))
-        color_mapping = dict(zip(layer_names, colors))
-    
-    # Filter to only visible layers with data
-    visible_layers = {name: info for name, info in layers.items() 
-                     if info['visible'] and np.sum(info['mask']) > 0}
-    
-    # Get audio parameters from metadata
-    sr = metadata.get('sample_rate', 44100)
-    nfft = metadata.get('nfft', 2048)
-    
-    # Compute time and frequency parameters
-    duration = spec_array.shape[1] * librosa.frames_to_time(1, sr=sr, n_fft=nfft)
-    max_freq = sr / 2
-    
-    # Create figure with subplots
-    n_layers = len(visible_layers)
-    fig, axes = plt.subplots(1, n_layers + 1, figsize=(4 * (n_layers + 1), 5))
-    
-    # Ensure axes is always iterable
-    if n_layers == 0:
-        axes = [axes]
-    elif not isinstance(axes, np.ndarray):
-        axes = [axes]
-    
-    # First subplot: original spectrogram
-    axes[0].imshow(spec_array, aspect='auto', cmap='gray', origin='upper',
-                   extent=[0, duration, 0, max_freq])
-    axes[0].set_title("Original", fontsize=12, weight='bold')
-    axes[0].set_xlabel('Time (s)', fontsize=9)
-    axes[0].set_ylabel('Frequency (Hz)', fontsize=9)
-    
-    # Subsequent subplots: individual layers
-    for idx, (layer_name, layer_info) in enumerate(visible_layers.items(), start=1):
-        ax = axes[idx]
+    try:
+        # Find spectrogram and XCF files with better error handling
+        files = os.listdir(project_path)
+        print(f"📁 Files in {project_path}:")
+        for f in files:
+            print(f"   - {f}")
         
-        # Display spectrogram as background
-        ax.imshow(spec_array, aspect='auto', cmap='gray', origin='upper',
-                  extent=[0, duration, 0, max_freq])
+        # Case-insensitive search for spectrogram
+        spectrogram_files = [f for f in files if f.lower().endswith('_spectrogram.png')]
+        if not spectrogram_files:
+            raise FileNotFoundError(f"No spectrogram file (*_spectrogram.png) found in {project_path}")
+        spectrogram_file = spectrogram_files[0]
         
-        # Overlay single layer
-        color = color_mapping.get(layer_name, '#FFFFFF')
-        mask = layer_info['mask']
+        # Case-insensitive search for XCF
+        xcf_files = [f for f in files if f.lower().endswith('.xcf')]
+        if not xcf_files:
+            raise FileNotFoundError(f"No XCF file (*.xcf) found in {project_path}")
+        xcf_file = xcf_files[0]
         
-        # Ensure mask matches spectrogram dimensions
-        if mask.shape != spec_array.shape[:2]:
-            from scipy.ndimage import zoom
-            scale_y = spec_array.shape[0] / mask.shape[0]
-            scale_x = spec_array.shape[1] / mask.shape[1]
-            mask = zoom(mask, (scale_y, scale_x), order=0) > 0.5
+        spectrogram_path = os.path.join(project_path, spectrogram_file)
+        xcf_path = os.path.join(project_path, xcf_file)
         
-        # Create colored overlay
-        color_rgb = np.array([int(color[i:i+2], 16) for i in (1, 3, 5)]) / 255.0
-        overlay = np.zeros((*mask.shape, 4))
-        overlay[:, :, :3] = color_rgb
-        overlay[:, :, 3] = mask.astype(float) * 0.8
+        # Load metadata for time/frequency info
+        metadata = load_metadata(project_path)
         
-        ax.imshow(overlay, aspect='auto', origin='upper',
-                  extent=[0, duration, 0, max_freq])
+        print(f"\n📊 Loading spectrogram: {spectrogram_file}")
         
-        pixel_count = np.sum(mask)
-        ax.set_title(f"{layer_name}\n({pixel_count} px)", 
-                     fontsize=9, color=color, weight='bold')
-        ax.set_xlabel('Time (s)', fontsize=9)
-        ax.set_ylabel('Frequency (Hz)', fontsize=9)
-    
-    plt.tight_layout()
-    
-    # Save or show
-    if output_path:
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        print(f"✅ Individual layers visualization saved to: {output_path}")
-    else:
-        plt.show()
-    
-    plt.close()
+        # Load spectrogram
+        spectrogram = Image.open(spectrogram_path)
+        spec_array = np.array(spectrogram)
+        
+        # Extract layers
+        layer_data = extract_layers_from_xcf(xcf_path, layer_group_name)
+        layers = layer_data['layers']
+        
+        if not layers:
+            print("⚠️  No layers found! Cannot create visualization.")
+            return
+        
+        # Use provided color mapping or generate default colors
+        if color_mapping is None:
+            layer_names = list(layers.keys())
+            colors = generate_distinct_colors(len(layer_names))
+            color_mapping = dict(zip(layer_names, colors))
+        
+        # Filter to only visible layers with data
+        visible_layers = {name: info for name, info in layers.items() 
+                         if info['visible'] and np.sum(info['mask']) > 0}
+        
+        # Get audio parameters from metadata
+        sr = metadata.get('sample_rate', 44100)
+        nfft = metadata.get('nfft', 2048)
+        
+        # Compute time and frequency parameters
+        duration = spec_array.shape[1] * librosa.frames_to_time(1, sr=sr, n_fft=nfft)
+        max_freq = sr / 2
+        
+        # Create figure with subplots
+        n_layers = len(visible_layers)
+        fig, axes = plt.subplots(1, n_layers + 1, figsize=(4 * (n_layers + 1), 5))
+        
+        # Ensure axes is always iterable
+        if n_layers == 0:
+            axes = [axes]
+        elif not isinstance(axes, np.ndarray):
+            axes = [axes]
+        
+        # First subplot: original spectrogram
+        axes[0].imshow(spec_array, aspect='auto', cmap='gray', origin='upper',
+                       extent=[0, duration, 0, max_freq])
+        axes[0].set_title("Original", fontsize=12, weight='bold')
+        axes[0].set_xlabel('Time (s)', fontsize=9)
+        axes[0].set_ylabel('Frequency (Hz)', fontsize=9)
+        
+        # Subsequent subplots: individual layers
+        for idx, (layer_name, layer_info) in enumerate(visible_layers.items(), start=1):
+            ax = axes[idx]
+            
+            # Display spectrogram as background
+            ax.imshow(spec_array, aspect='auto', cmap='gray', origin='upper',
+                      extent=[0, duration, 0, max_freq])
+            
+            # Overlay single layer
+            color = color_mapping.get(layer_name, '#FFFFFF')
+            mask = layer_info['mask']
+            
+            # Ensure mask matches spectrogram dimensions
+            if mask.shape != spec_array.shape[:2]:
+                from scipy.ndimage import zoom
+                scale_y = spec_array.shape[0] / mask.shape[0]
+                scale_x = spec_array.shape[1] / mask.shape[1]
+                mask = zoom(mask, (scale_y, scale_x), order=0) > 0.5
+            
+            # Create colored overlay
+            color_rgb = np.array([int(color[i:i+2], 16) for i in (1, 3, 5)]) / 255.0
+            overlay = np.zeros((*mask.shape, 4))
+            overlay[:, :, :3] = color_rgb
+            overlay[:, :, 3] = mask.astype(float) * 0.8
+            
+            ax.imshow(overlay, aspect='auto', origin='upper',
+                      extent=[0, duration, 0, max_freq])
+            
+            pixel_count = np.sum(mask)
+            ax.set_title(f"{layer_name}\n({pixel_count} px)", 
+                         fontsize=9, color=color, weight='bold')
+            ax.set_xlabel('Time (s)', fontsize=9)
+            ax.set_ylabel('Frequency (Hz)', fontsize=9)
+        
+        plt.tight_layout()
+        
+        # Save or show
+        if output_path:
+            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            print(f"✅ Individual layers visualization saved to: {output_path}")
+        else:
+            plt.show()
+        
+        plt.close()
+        
+    except Exception as e:
+        print(f"❌ Detailed error in visualize_individual_layers:")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   Error message: {str(e)}")
+        print(f"   Traceback:")
+        traceback.print_exc()
+        raise
 
 
 def visualize_all_projects(project_folder: str, clip_basename: str, 
