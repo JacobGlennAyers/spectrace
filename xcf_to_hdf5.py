@@ -8,10 +8,10 @@ from ml_prep import XCFToStandardConverter
 
 def main():
     # Your existing project folder
-    project_folder = "./projects"
+    project_folder = "projects"
     
     # New folder for ML data
-    ml_data_folder = "./hdf5_files"
+    ml_data_folder = "hdf5_files"
     
     # Optional: path to master template
     template_xcf = "templates/orca_template.xcf"  # or None
