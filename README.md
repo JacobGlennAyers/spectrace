@@ -61,7 +61,7 @@ flatpak run org.gimp.GIMP//2.10
 brew install gimp@2.10
 ```
 
-If Homebrew doesn't have GIMP 2.10 available, download from this [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) or [FossHub archive](https://www.fosshub.com/GIMP-old.html).
+If Homebrew doesn't have GIMP 2.10 available, download from the .dmg from this release [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) or [FossHub archive](https://www.fosshub.com/GIMP-old.html).
 
 ### Setting Up Spectrace
 
