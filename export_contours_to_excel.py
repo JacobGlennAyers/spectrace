@@ -1,407 +1,463 @@
 #!/usr/bin/env python3
 """
-Export time-frequency contours from HDF5 files to Excel spreadsheet.
+Export time-frequency contours from HDF5 files (schema v2) to Excel.
 
-This script:
-1. Loads all HDF5 files from the ml_data folder
-2. Extracts time-frequency information for each layer/class
-3. Outputs a comprehensive Excel file with multiple sheets:
-   - Summary: Overview of all samples
-   - Contours: Detailed time-frequency points for each annotation
-   - Statistics: Per-annotation statistics (duration, bandwidth, etc.)
+HDF5 schema v2 layout (one file per audio clip):
+    clip_basename.hdf5
+    ├── audio_wav
+    ├── spectrogram            (uint8, HxW)
+    ├── metadata/              (shared audio/spectrogram params)
+    │   ├── @sample_rate
+    │   ├── @nfft
+    │   ├── @noverlap
+    │   ├── @duration_sec
+    │   ├── @max_freq_hz
+    │   ├── @time_per_pixel
+    │   └── @freq_per_pixel
+    ├── @class_names           (JSON string)
+    ├── @num_classes
+    ├── @num_annotations
+    └── annotations/
+        ├── 0/
+        │   ├── masks          (uint8, CxHxW)
+        │   ├── @notes
+        │   └── @timing_drift
+        ├── 1/
+        │   └── ...
+        └── ...
+
+Output Excel sheets:
+  Summary       – one row per annotation set (from dataset_index.csv)
+  Contours      – time-frequency points, one row per time frame per annotation
+  Statistics    – per-annotation bounding-box metrics
+  Class_Summary – aggregate stats per class across all annotations
 """
 
-import sys
-from pathlib import Path
-import pandas as pd
-import numpy as np
-import h5py
 import json
-from typing import Dict, List, Tuple
 import warnings
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+import h5py
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 
 
-def load_hdf5_metadata(hdf5_path: Path) -> Dict:
-    """Load metadata from HDF5 file."""
-    with h5py.File(hdf5_path, 'r') as f:
-        metadata = dict(f['metadata'].attrs)
-        class_names = json.loads(f.attrs['class_names'])
-        num_classes = f.attrs['num_classes']
-    
-    metadata['class_names'] = class_names
-    metadata['num_classes'] = num_classes
-    return metadata
-
+# ---------------------------------------------------------------------------
+# Contour extraction
+# ---------------------------------------------------------------------------
 
 def extract_contours_from_mask(
     mask: np.ndarray,
     sample_rate: int,
     nfft: int,
     noverlap: int,
-    method: str = "centroid"
+    method: str = "centroid",
 ) -> pd.DataFrame:
     """
     Extract time-frequency contours from a binary mask.
-    
-    Args:
-        mask: Binary mask (H, W) where H=freq bins, W=time frames
-        sample_rate: Audio sample rate (Hz)
-        nfft: FFT window length
-        noverlap: Overlap between windows
-        method: "centroid", "min_max", or "all_points"
-    
-    Returns:
-        DataFrame with time and frequency information
-    """
-    height, width = mask.shape
-    
-    # Calculate physical parameters
-    hop_length = nfft - noverlap
-    time_per_frame = hop_length / sample_rate
-    max_freq = sample_rate / 2
-    freq_per_bin = max_freq / height
-    
-    contour_data = []
-    
-    if method == "centroid":
-        # One point per time frame: frequency centroid
-        for t_idx in range(width):
-            col = mask[:, t_idx]
-            if col.sum() > 0:
-                # Get active frequency bins
-                active_freqs = np.where(col)[0]
-                
-                # Calculate centroid (weighted average)
-                centroid_idx = active_freqs.mean()
-                
-                # Convert to physical units
-                time_sec = t_idx * time_per_frame
-                # Note: frequency axis is inverted (0 = top = max freq)
-                freq_hz = max_freq - (centroid_idx * freq_per_bin)
-                
-                contour_data.append({
-                    'time_sec': time_sec,
-                    'freq_hz': freq_hz,
-                    'pixel_count': len(active_freqs)
-                })
-    
-    elif method == "min_max":
-        # Min and max frequency per time frame
-        for t_idx in range(width):
-            col = mask[:, t_idx]
-            if col.sum() > 0:
-                active_freqs = np.where(col)[0]
-                
-                time_sec = t_idx * time_per_frame
-                freq_min = max_freq - (active_freqs.max() * freq_per_bin)
-                freq_max = max_freq - (active_freqs.min() * freq_per_bin)
-                
-                contour_data.append({
-                    'time_sec': time_sec,
-                    'freq_min_hz': freq_min,
-                    'freq_max_hz': freq_max,
-                    'bandwidth_hz': freq_max - freq_min,
-                    'pixel_count': len(active_freqs)
-                })
-    
-    elif method == "all_points":
-        # All active pixels
-        active_pixels = np.argwhere(mask)
-        for freq_idx, time_idx in active_pixels:
-            time_sec = time_idx * time_per_frame
-            freq_hz = max_freq - (freq_idx * freq_per_bin)
-            
-            contour_data.append({
-                'time_sec': time_sec,
-                'freq_hz': freq_hz
-            })
-    
-    return pd.DataFrame(contour_data)
 
+    Args:
+        mask:        Binary mask (H, W) — H=freq bins, W=time frames
+        sample_rate: Audio sample rate in Hz
+        nfft:        FFT window length
+        noverlap:    Overlap between windows
+        method:      "centroid" | "min_max" | "all_points"
+
+    Returns:
+        DataFrame with time/frequency columns.
+    """
+    height, width  = mask.shape
+    hop_length     = nfft - noverlap
+    time_per_frame = hop_length / sample_rate
+    max_freq       = sample_rate / 2
+    freq_per_bin   = max_freq / height
+
+    rows = []
+
+    if method == "centroid":
+        for t in range(width):
+            col = mask[:, t]
+            if col.sum():
+                active = np.where(col)[0]
+                rows.append({
+                    'time_sec':    t * time_per_frame,
+                    'freq_hz':     max_freq - (active.mean() * freq_per_bin),
+                    'pixel_count': len(active),
+                })
+
+    elif method == "min_max":
+        for t in range(width):
+            col = mask[:, t]
+            if col.sum():
+                active = np.where(col)[0]
+                f_min = max_freq - (active.max() * freq_per_bin)
+                f_max = max_freq - (active.min() * freq_per_bin)
+                rows.append({
+                    'time_sec':     t * time_per_frame,
+                    'freq_min_hz':  f_min,
+                    'freq_max_hz':  f_max,
+                    'bandwidth_hz': f_max - f_min,
+                    'pixel_count':  len(active),
+                })
+
+    elif method == "all_points":
+        for f_idx, t_idx in np.argwhere(mask):
+            rows.append({
+                'time_sec': t_idx * time_per_frame,
+                'freq_hz':  max_freq - (f_idx * freq_per_bin),
+            })
+
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Statistics
+# ---------------------------------------------------------------------------
 
 def compute_annotation_statistics(
     mask: np.ndarray,
     sample_rate: int,
     nfft: int,
-    noverlap: int
+    noverlap: int,
 ) -> Dict:
-    """
-    Compute comprehensive statistics for an annotation mask.
-    
-    Returns:
-        Dictionary with temporal and spectral statistics
-    """
+    """Compute temporal and spectral bounding-box statistics for one mask."""
+
     if mask.sum() == 0:
-        return {
-            'pixel_count': 0,
-            'duration_sec': 0,
-            'bandwidth_hz': 0,
-            'start_time_sec': None,
-            'end_time_sec': None,
-            'min_freq_hz': None,
-            'max_freq_hz': None,
-            'center_freq_hz': None,
-            'time_coverage_pct': 0,
-            'freq_coverage_pct': 0
-        }
-    
-    height, width = mask.shape
-    hop_length = nfft - noverlap
-    time_per_frame = hop_length / sample_rate
-    max_freq = sample_rate / 2
-    freq_per_bin = max_freq / height
-    
-    # Find bounding box
-    active_pixels = np.argwhere(mask)
-    freq_indices = active_pixels[:, 0]
-    time_indices = active_pixels[:, 1]
-    
-    # Temporal statistics
-    time_min_idx = time_indices.min()
-    time_max_idx = time_indices.max()
-    start_time_sec = time_min_idx * time_per_frame
-    end_time_sec = time_max_idx * time_per_frame
-    duration_sec = end_time_sec - start_time_sec
-    
-    # Spectral statistics (frequency axis is inverted)
-    freq_min_idx = freq_indices.min()
-    freq_max_idx = freq_indices.max()
-    max_freq_hz = max_freq - (freq_min_idx * freq_per_bin)
-    min_freq_hz = max_freq - (freq_max_idx * freq_per_bin)
-    bandwidth_hz = max_freq_hz - min_freq_hz
-    center_freq_hz = (max_freq_hz + min_freq_hz) / 2
-    
-    return {
-        'pixel_count': int(mask.sum()),
-        'duration_sec': float(duration_sec),
-        'bandwidth_hz': float(bandwidth_hz),
-        'start_time_sec': float(start_time_sec),
-        'end_time_sec': float(end_time_sec),
-        'min_freq_hz': float(min_freq_hz),
-        'max_freq_hz': float(max_freq_hz),
-        'center_freq_hz': float(center_freq_hz),
-        'time_coverage_pct': float(100 * (time_max_idx - time_min_idx + 1) / width),
-        'freq_coverage_pct': float(100 * (freq_max_idx - freq_min_idx + 1) / height)
-    }
-
-
-def process_single_hdf5(hdf5_path: Path, contour_method: str = "centroid") -> Tuple[List, List]:
-    """
-    Process a single HDF5 file and extract contours + statistics.
-    
-    Returns:
-        (contours_list, stats_list) where each is a list of dictionaries
-    """
-    print(f"  Processing: {hdf5_path.name}")
-    
-    # Load metadata
-    metadata = load_hdf5_metadata(hdf5_path)
-    
-    sample_rate = metadata['sample_rate']
-    nfft = metadata['nfft']
-    noverlap = metadata['noverlap']
-    class_names = metadata['class_names']
-    clip_basename = metadata['clip_basename']
-    project_index = metadata['project_index']
-    
-    sample_id = hdf5_path.stem
-    
-    # Load masks
-    with h5py.File(hdf5_path, 'r') as f:
-        masks = f['masks'][:]  # Shape: (num_classes, H, W)
-    
-    contours_list = []
-    stats_list = []
-    
-    # Process each class
-    for class_idx, class_name in enumerate(class_names):
-        mask = masks[class_idx]
-        
-        # Skip empty masks
-        if mask.sum() == 0:
-            continue
-        
-        # Extract contours
-        contours = extract_contours_from_mask(
-            mask, sample_rate, nfft, noverlap, method=contour_method
+        return dict(
+            pixel_count=0, duration_sec=0, bandwidth_hz=0,
+            start_time_sec=None, end_time_sec=None,
+            min_freq_hz=None, max_freq_hz=None, center_freq_hz=None,
+            time_coverage_pct=0, freq_coverage_pct=0,
         )
-        
-        if len(contours) > 0:
-            contours['sample_id'] = sample_id
-            contours['clip_basename'] = clip_basename
-            contours['project_index'] = project_index
-            contours['class'] = class_name
-            contours['sample_rate'] = sample_rate
-            contours['nfft'] = nfft
-            contours['noverlap'] = noverlap
-            
-            contours_list.append(contours)
-        
-        # Compute statistics
-        stats = compute_annotation_statistics(mask, sample_rate, nfft, noverlap)
-        stats['sample_id'] = sample_id
-        stats['clip_basename'] = clip_basename
-        stats['project_index'] = project_index
-        stats['class'] = class_name
-        stats['sample_rate'] = sample_rate
-        stats['nfft'] = nfft
-        stats['noverlap'] = noverlap
-        
-        stats_list.append(stats)
-    
+
+    height, width  = mask.shape
+    hop_length     = nfft - noverlap
+    time_per_frame = hop_length / sample_rate
+    max_freq       = sample_rate / 2
+    freq_per_bin   = max_freq / height
+
+    active    = np.argwhere(mask)
+    f_indices = active[:, 0]
+    t_indices = active[:, 1]
+
+    t_min, t_max = int(t_indices.min()), int(t_indices.max())
+    f_min, f_max = int(f_indices.min()), int(f_indices.max())
+
+    # Low pixel index (f_min) → high frequency; high pixel index → low freq
+    freq_high = max_freq - (f_min * freq_per_bin)
+    freq_low  = max_freq - (f_max * freq_per_bin)
+
+    return dict(
+        pixel_count       = int(mask.sum()),
+        start_time_sec    = float(t_min * time_per_frame),
+        end_time_sec      = float(t_max * time_per_frame),
+        duration_sec      = float((t_max - t_min) * time_per_frame),
+        min_freq_hz       = float(freq_low),
+        max_freq_hz       = float(freq_high),
+        bandwidth_hz      = float(freq_high - freq_low),
+        center_freq_hz    = float((freq_high + freq_low) / 2),
+        time_coverage_pct = float(100 * (t_max - t_min + 1) / width),
+        freq_coverage_pct = float(100 * (f_max - f_min + 1) / height),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-file processor  (schema v2 — annotations/0/, annotations/1/, …)
+# ---------------------------------------------------------------------------
+
+def process_single_hdf5(
+    hdf5_path: Path,
+    contour_method: str = "centroid",
+) -> Tuple[List[pd.DataFrame], List[Dict]]:
+    """
+    Process one HDF5 file (schema v2).
+
+    Reads shared metadata once from `metadata/`, then iterates every
+    annotation set under `annotations/<index>/masks`.
+
+    Returns:
+        (contours_list, stats_list)
+    """
+    print(f"  {hdf5_path.name}")
+
+    contours_list: List[pd.DataFrame] = []
+    stats_list:    List[Dict]         = []
+
+    with h5py.File(hdf5_path, 'r') as f:
+
+        # ── shared metadata (stored once per clip) ───────────────────────────
+        meta         = f['metadata']
+        sample_rate  = int(meta.attrs['sample_rate'])
+        nfft         = int(meta.attrs['nfft'])
+        noverlap     = int(meta.attrs['noverlap'])
+        duration_sec = float(meta.attrs['duration_sec'])
+
+        clip_basename = hdf5_path.stem
+        class_names   = json.loads(f.attrs['class_names'])
+
+        # ── iterate every annotation set ────────────────────────────────────
+        ann_grp  = f['annotations']
+        ann_keys = sorted(ann_grp.keys(), key=int)
+
+        for ann_key in ann_keys:
+            ann_index    = int(ann_key)
+            ann          = ann_grp[ann_key]
+            masks        = ann['masks'][:]        # (C, H, W)
+            notes        = str(ann.attrs.get('notes', ''))
+            timing_drift = bool(ann.attrs.get('timing_drift', False))
+
+            # Count only non-empty masks as actual classes present
+            non_empty_classes = [
+                class_names[i] for i in range(len(class_names))
+                if masks[i].sum() > 0
+            ]
+            num_classes_present = len(non_empty_classes)
+
+            for class_idx, class_name in enumerate(class_names):
+                mask = masks[class_idx]
+
+                if mask.sum() == 0:
+                    continue
+
+                shared = {
+                    'clip_basename':    clip_basename,
+                    'annotation_index': ann_index,
+                    'class':            class_name,
+                    'notes':            notes,
+                    'timing_drift':     timing_drift,
+                    'num_classes':      num_classes_present,
+                    'classes_present':  ', '.join(non_empty_classes),
+                    'sample_rate':      sample_rate,
+                    'nfft':             nfft,
+                    'noverlap':         noverlap,
+                    'duration_sec':     duration_sec,
+                }
+
+                # contours
+                df = extract_contours_from_mask(
+                    mask, sample_rate, nfft, noverlap, contour_method
+                )
+                if len(df):
+                    for col, val in shared.items():
+                        df[col] = val
+                    contours_list.append(df)
+
+                # statistics
+                stats = compute_annotation_statistics(
+                    mask, sample_rate, nfft, noverlap
+                )
+                stats.update(shared)
+                stats_list.append(stats)
+
     return contours_list, stats_list
 
+
+# ---------------------------------------------------------------------------
+# Main export
+# ---------------------------------------------------------------------------
 
 def export_to_excel(
     ml_data_folder: str,
     output_excel: str,
-    contour_method: str = "centroid"
+    contour_method: str = "centroid",
 ):
     """
-    Export all HDF5 files to a comprehensive Excel spreadsheet.
-    
+    Walk ml_data_folder for .hdf5 files (schema v2) and write a
+    multi-sheet Excel file.
+
     Args:
-        ml_data_folder: Path to folder containing HDF5 files
-        output_excel: Output Excel filename
-        contour_method: "centroid", "min_max", or "all_points"
+        ml_data_folder: Folder containing HDF5 files + dataset_index.csv
+        output_excel:   Output .xlsx path
+        contour_method: "centroid" | "min_max" | "all_points"
     """
     ml_data_path = Path(ml_data_folder)
-    
-    # Find all HDF5 files
-    hdf5_files = list(ml_data_path.glob("*.hdf5"))
-    
+    hdf5_files   = sorted(ml_data_path.glob("*.hdf5"))
+
     if not hdf5_files:
         print(f"❌ No HDF5 files found in {ml_data_folder}")
         return
-    
-    print(f"\n📊 Found {len(hdf5_files)} HDF5 files")
-    print(f"Extraction method: {contour_method}")
-    
-    # Process all files
-    all_contours = []
-    all_stats = []
-    
-    for hdf5_path in sorted(hdf5_files):
+
+    print(f"\n📊 {len(hdf5_files)} HDF5 file(s) found  (method: {contour_method})\n")
+
+    all_contours: List[pd.DataFrame] = []
+    all_stats:    List[Dict]         = []
+    errors = 0
+
+    for hdf5_path in hdf5_files:
         try:
-            contours_list, stats_list = process_single_hdf5(hdf5_path, contour_method)
-            all_contours.extend(contours_list)
-            all_stats.extend(stats_list)
+            c, s = process_single_hdf5(hdf5_path, contour_method)
+            all_contours.extend(c)
+            all_stats.extend(s)
         except Exception as e:
-            print(f"  ⚠️  Error processing {hdf5_path.name}: {e}")
-            continue
-    
+            print(f"  ⚠️  {hdf5_path.name}: {e}")
+            errors += 1
+
     if not all_contours and not all_stats:
-        print("❌ No data extracted from any files!")
+        print("❌ No data extracted.")
         return
-    
-    print(f"\n✅ Extracted data from {len(hdf5_files)} files")
-    
-    # Combine dataframes
-    if all_contours:
-        contours_df = pd.concat(all_contours, ignore_index=True)
-        print(f"   Total contour points: {len(contours_df)}")
-    else:
-        contours_df = pd.DataFrame()
-    
-    if all_stats:
-        stats_df = pd.DataFrame(all_stats)
-        # Filter out empty annotations
-        stats_df = stats_df[stats_df['pixel_count'] > 0]
-        print(f"   Total annotations: {len(stats_df)}")
-    else:
-        stats_df = pd.DataFrame()
-    
-    # Load dataset index for summary
-    index_path = ml_data_path / "dataset_index.csv"
-    if index_path.exists():
-        summary_df = pd.read_csv(index_path)
-    else:
-        summary_df = pd.DataFrame()
-    
-    # Create Excel writer with multiple sheets
-    print(f"\n💾 Writing to Excel: {output_excel}")
-    
+
+    ok = len(hdf5_files) - errors
+    print(f"\n✅ {ok}/{len(hdf5_files)} files processed"
+          + (f"  ({errors} error(s))" if errors else ""))
+
+    # ── build DataFrames ─────────────────────────────────────────────────────
+    contours_df = (
+        pd.concat(all_contours, ignore_index=True)
+        if all_contours else pd.DataFrame()
+    )
+    stats_df = pd.DataFrame(all_stats)
+    if not stats_df.empty:
+        stats_df = stats_df[stats_df['pixel_count'] > 0].reset_index(drop=True)
+
+    if not contours_df.empty:
+        print(f"   Contour points   : {len(contours_df):,}")
+    if not stats_df.empty:
+        print(f"   Annotations      : {len(stats_df):,}")
+
+    # Optional summary from dataset_index.csv — override num_classes with
+    # the actual non-empty count derived from the HDF5 masks.
+    index_csv  = ml_data_path / "dataset_index.csv"
+    summary_df = pd.read_csv(index_csv) if index_csv.exists() else pd.DataFrame()
+
+    if not summary_df.empty and not stats_df.empty:
+        # Build a lookup of actual non-empty class counts per (clip, annotation)
+        actual_counts = (
+            stats_df.groupby(['clip_basename', 'annotation_index'])
+            .agg(
+                num_classes     = ('class', 'nunique'),
+                classes_present = ('class', lambda x: ', '.join(sorted(x.unique()))),
+            )
+            .reset_index()
+        )
+
+        # If summary_df has a num_classes column from the template, replace it
+        if 'num_classes' in summary_df.columns:
+            summary_df = summary_df.drop(columns=['num_classes'])
+        if 'classes_present' in summary_df.columns:
+            summary_df = summary_df.drop(columns=['classes_present'])
+
+        # Merge actual counts into the summary
+        merge_cols = []
+        if 'clip_basename' in summary_df.columns and 'annotation_index' in summary_df.columns:
+            merge_cols = ['clip_basename', 'annotation_index']
+        elif 'clip_basename' in summary_df.columns:
+            # Aggregate per clip if summary doesn't track annotation_index
+            actual_counts = (
+                stats_df.groupby('clip_basename')
+                .agg(
+                    num_classes     = ('class', 'nunique'),
+                    classes_present = ('class', lambda x: ', '.join(sorted(x.unique()))),
+                )
+                .reset_index()
+            )
+            merge_cols = ['clip_basename']
+
+        if merge_cols:
+            summary_df = summary_df.merge(actual_counts, on=merge_cols, how='left')
+
+    # ── column ordering ───────────────────────────────────────────────────────
+    ID_COLS = ['clip_basename', 'annotation_index', 'class',
+               'num_classes', 'classes_present',
+               'notes', 'timing_drift']
+
+    def front_cols(df: pd.DataFrame) -> pd.DataFrame:
+        front = [c for c in ID_COLS if c in df.columns]
+        rest  = [c for c in df.columns if c not in front]
+        return df[front + rest]
+
+    # ── write Excel ──────────────────────────────────────────────────────────
+    print(f"\n💾 Writing → {output_excel}")
+
     with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-        # Sheet 1: Summary
+
         if not summary_df.empty:
             summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            print(f"   ✓ Sheet 'Summary': {len(summary_df)} samples")
-        
-        # Sheet 2: Contours (detailed time-frequency points)
-        if not contours_df.empty:
-            contours_df.to_excel(writer, sheet_name='Contours', index=False)
-            print(f"   ✓ Sheet 'Contours': {len(contours_df)} data points")
-        
-        # Sheet 3: Statistics (per-annotation summary)
-        if not stats_df.empty:
-            stats_df.to_excel(writer, sheet_name='Statistics', index=False)
-            print(f"   ✓ Sheet 'Statistics': {len(stats_df)} annotations")
-        
-        # Sheet 4: Class Summary
-        if not stats_df.empty:
-            class_summary = stats_df.groupby('class').agg({
-                'pixel_count': ['count', 'mean', 'std', 'min', 'max'],
-                'duration_sec': ['mean', 'std', 'min', 'max'],
-                'bandwidth_hz': ['mean', 'std', 'min', 'max'],
-                'center_freq_hz': ['mean', 'std']
-            }).round(2)
-            
-            # Flatten multi-index columns
-            class_summary.columns = ['_'.join(col).strip() for col in class_summary.columns.values]
-            class_summary = class_summary.reset_index()
-            
-            class_summary.to_excel(writer, sheet_name='Class_Summary', index=False)
-            print(f"   ✓ Sheet 'Class_Summary': {len(class_summary)} classes")
-    
-    print(f"\n✅ Excel export complete: {output_excel}")
-    
-    # Print summary statistics
-    if not stats_df.empty:
-        print("\n📈 Dataset Statistics:")
-        print(f"   Total samples: {stats_df['sample_id'].nunique()}")
-        print(f"   Total annotations: {len(stats_df)}")
-        print(f"   Classes: {sorted(stats_df['class'].unique())}")
-        print(f"\n   Per-class annotation counts:")
-        class_counts = stats_df['class'].value_counts().sort_index()
-        for class_name, count in class_counts.items():
-            print(f"      {class_name}: {count}")
+            print(f"   ✓ Summary        : {len(summary_df)} rows")
 
+        if not contours_df.empty:
+            front_cols(contours_df).to_excel(
+                writer, sheet_name='Contours', index=False
+            )
+            print(f"   ✓ Contours       : {len(contours_df):,} points")
+
+        if not stats_df.empty:
+            front_cols(stats_df).to_excel(
+                writer, sheet_name='Statistics', index=False
+            )
+            print(f"   ✓ Statistics     : {len(stats_df):,} annotations")
+
+            class_summary = (
+                stats_df.groupby('class')
+                .agg(
+                    annotation_count    = ('pixel_count',    'count'),
+                    duration_mean_sec   = ('duration_sec',   'mean'),
+                    duration_std_sec    = ('duration_sec',   'std'),
+                    duration_min_sec    = ('duration_sec',   'min'),
+                    duration_max_sec    = ('duration_sec',   'max'),
+                    bandwidth_mean_hz   = ('bandwidth_hz',   'mean'),
+                    bandwidth_std_hz    = ('bandwidth_hz',   'std'),
+                    bandwidth_min_hz    = ('bandwidth_hz',   'min'),
+                    bandwidth_max_hz    = ('bandwidth_hz',   'max'),
+                    center_freq_mean_hz = ('center_freq_hz', 'mean'),
+                    center_freq_std_hz  = ('center_freq_hz', 'std'),
+                    pixel_count_mean    = ('pixel_count',    'mean'),
+                    pixel_count_total   = ('pixel_count',    'sum'),
+                )
+                .round(3)
+                .reset_index()
+            )
+            class_summary.to_excel(
+                writer, sheet_name='Class_Summary', index=False
+            )
+            print(f"   ✓ Class_Summary  : {len(class_summary)} classes")
+
+    print(f"\n✅ Done → {output_excel}")
+
+    # ── console summary ───────────────────────────────────────────────────────
+    if not stats_df.empty:
+        n_ann_sets = stats_df.groupby(['clip_basename', 'annotation_index']).ngroups
+        print(f"\n📈 Dataset overview:")
+        print(f"   Clips            : {stats_df['clip_basename'].nunique()}")
+        print(f"   Annotation sets  : {n_ann_sets}")
+        print(f"   Total annotations: {len(stats_df)}")
+        print(f"   Classes (active) : {sorted(stats_df['class'].unique())}")
+        print(f"\n   Annotations per class:")
+        for cls, cnt in stats_df['class'].value_counts().sort_index().items():
+            print(f"      {cls}: {cnt}")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main():
-    """Main execution function."""
-    # Configuration
-    ml_data_folder = "./hdf5_files"
-    output_excel = "whale_contours_export.xlsx"
-    
-    # Contour extraction method:
-    # - "centroid": One freq value per time frame (smoothest, recommended)
-    # - "min_max": Min/max freq per time frame (captures bandwidth)
-    # - "all_points": Every pixel (most detailed, largest file)
-    contour_method = "centroid"
-    
-    print("="*60)
-    print("🐋 HDF5 to Excel Time-Frequency Exporter")
-    print("="*60)
-    print(f"Input folder: {ml_data_folder}")
-    print(f"Output file: {output_excel}")
-    print(f"Contour method: {contour_method}")
-    
-    # Run export
-    export_to_excel(
-        ml_data_folder=ml_data_folder,
-        output_excel=output_excel,
-        contour_method=contour_method
-    )
-    
-    print("\n" + "="*60)
-    print("✅ Export complete!")
-    print("="*60)
-    print(f"\nOpen '{output_excel}' to view:")
-    print("  - Summary: Dataset overview")
-    print("  - Contours: Time-frequency points for each annotation")
-    print("  - Statistics: Per-annotation metrics")
-    print("  - Class_Summary: Aggregate statistics per class")
+    ml_data_folder = "/media/songbird/SSD3/whale_freq_contour_trace_data/hdf5_data"
+    output_excel   = "/media/songbird/SSD3/whale_freq_contour_trace_data/whale_contours_export.xlsx"
+
+    # "centroid"   – one freq value per time frame (recommended)
+    # "min_max"    – min + max freq per time frame (captures bandwidth)
+    # "all_points" – every active pixel (largest output)
+    contour_method = "all_points"
+
+    print("=" * 60)
+    print("🐋 HDF5 → Excel Exporter  (schema v2 — consolidated format)")
+    print("=" * 60)
+    print(f"Input  : {ml_data_folder}")
+    print(f"Output : {output_excel}")
+    print(f"Method : {contour_method}")
+
+    export_to_excel(ml_data_folder, output_excel, contour_method)
+
+    print("\n" + "=" * 60)
+    print("Sheets written:")
+    print("  Summary       – annotation sets (from dataset_index.csv)")
+    print("  Contours      – time-frequency points per annotation")
+    print("  Statistics    – per-annotation bounding-box metrics")
+    print("  Class_Summary – aggregate stats per class")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

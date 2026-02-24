@@ -456,9 +456,9 @@ Or set to `None` to auto-discover from existing projects.
 
 ## Advanced Usage
 
-### Converting to HDF5 Format
+# HDF5 Schema — Converting to HDF5 Format
 
-For machine learning pipelines, convert XCF annotations to HDF5:
+For more flexibility, convert XCF annotations to HDF5:
 
 Edit `xcf_to_hdf5.py` to set your input/output paths:
 ```python
@@ -472,27 +472,40 @@ python xcf_to_hdf5.py
 ```
 
 This creates:
-- One HDF5 file per project
-- `dataset_index.csv` with metadata for all samples
+- One HDF5 file **per audio clip** (consolidating all annotation passes for that clip)
+- `dataset_index.csv` with metadata for all annotation sets
 
 Each HDF5 file contains:
-- `spectrogram`: Grayscale spectrogram array (H, W)
-- `masks`: Binary masks array (C, H, W) where C is number of classes
-- `metadata`: Audio parameters and project information
-- `class_names`: List of annotation class names
+- `spectrogram`: Grayscale spectrogram array (H, W), stored once per clip
+- `annotations/<index>/masks`: Binary masks array (C, H, W) per annotation set, where C is number of classes
+- `annotations/<index>/`: Per-annotation attributes: `notes` (str) and `timing_drift` (bool)
+- `metadata/`: Shared audio parameters (sample rate, nfft, noverlap, duration, etc.)
+- `@class_names`: JSON list of annotation class names (root attribute)
+- `@num_annotations`: Number of annotation sets in this file (root attribute)
 
-### Loading HDF5 Data
+## Loading HDF5 Data
 
 ```python
-from ml_prep import HDF5SpectrogramLoader
+from hdf5_utils import HDF5SpectrogramLoader
 
 with HDF5SpectrogramLoader("hdf5_files/orca_0.hdf5") as loader:
-    spec, masks, metadata = loader.load()
+    # Load spectrogram, masks, and metadata for the first annotation set
+    spec, masks, metadata = loader.load(annotation_index=0)
     class_names = loader.get_class_names()
-    
-    # Get specific class mask
-    f0_mask = loader.get_class_mask("f0_LFC")
+
+    # Get specific class mask from a specific annotation set
+    f0_mask = loader.get_class_mask("f0_LFC", annotation_index=0)
+
+    # List all annotation sets in this file
+    indices = loader.get_annotation_indices()  # e.g. [0, 1, 2]
+
+    # Load masks for a different annotation set
+    masks_v2 = loader.load_masks(annotation_index=1)
+
+    # Check which classes have annotations (non-zero masks)
+    non_empty = loader.get_non_empty_classes(annotation_index=0)
 ```
+
 
 ### Exporting to Excel
 
