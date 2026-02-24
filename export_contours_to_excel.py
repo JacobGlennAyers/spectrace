@@ -209,6 +209,13 @@ def process_single_hdf5(
             notes        = str(ann.attrs.get('notes', ''))
             timing_drift = bool(ann.attrs.get('timing_drift', False))
 
+            # Count only non-empty masks as actual classes present
+            non_empty_classes = [
+                class_names[i] for i in range(len(class_names))
+                if masks[i].sum() > 0
+            ]
+            num_classes_present = len(non_empty_classes)
+
             for class_idx, class_name in enumerate(class_names):
                 mask = masks[class_idx]
 
@@ -221,6 +228,8 @@ def process_single_hdf5(
                     'class':            class_name,
                     'notes':            notes,
                     'timing_drift':     timing_drift,
+                    'num_classes':      num_classes_present,
+                    'classes_present':  ', '.join(non_empty_classes),
                     'sample_rate':      sample_rate,
                     'nfft':             nfft,
                     'noverlap':         noverlap,
@@ -308,12 +317,50 @@ def export_to_excel(
     if not stats_df.empty:
         print(f"   Annotations      : {len(stats_df):,}")
 
-    # Optional summary from dataset_index.csv
+    # Optional summary from dataset_index.csv — override num_classes with
+    # the actual non-empty count derived from the HDF5 masks.
     index_csv  = ml_data_path / "dataset_index.csv"
     summary_df = pd.read_csv(index_csv) if index_csv.exists() else pd.DataFrame()
 
+    if not summary_df.empty and not stats_df.empty:
+        # Build a lookup of actual non-empty class counts per (clip, annotation)
+        actual_counts = (
+            stats_df.groupby(['clip_basename', 'annotation_index'])
+            .agg(
+                num_classes     = ('class', 'nunique'),
+                classes_present = ('class', lambda x: ', '.join(sorted(x.unique()))),
+            )
+            .reset_index()
+        )
+
+        # If summary_df has a num_classes column from the template, replace it
+        if 'num_classes' in summary_df.columns:
+            summary_df = summary_df.drop(columns=['num_classes'])
+        if 'classes_present' in summary_df.columns:
+            summary_df = summary_df.drop(columns=['classes_present'])
+
+        # Merge actual counts into the summary
+        merge_cols = []
+        if 'clip_basename' in summary_df.columns and 'annotation_index' in summary_df.columns:
+            merge_cols = ['clip_basename', 'annotation_index']
+        elif 'clip_basename' in summary_df.columns:
+            # Aggregate per clip if summary doesn't track annotation_index
+            actual_counts = (
+                stats_df.groupby('clip_basename')
+                .agg(
+                    num_classes     = ('class', 'nunique'),
+                    classes_present = ('class', lambda x: ', '.join(sorted(x.unique()))),
+                )
+                .reset_index()
+            )
+            merge_cols = ['clip_basename']
+
+        if merge_cols:
+            summary_df = summary_df.merge(actual_counts, on=merge_cols, how='left')
+
     # ── column ordering ───────────────────────────────────────────────────────
     ID_COLS = ['clip_basename', 'annotation_index', 'class',
+               'num_classes', 'classes_present',
                'notes', 'timing_drift']
 
     def front_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -376,7 +423,7 @@ def export_to_excel(
         print(f"   Clips            : {stats_df['clip_basename'].nunique()}")
         print(f"   Annotation sets  : {n_ann_sets}")
         print(f"   Total annotations: {len(stats_df)}")
-        print(f"   Classes          : {sorted(stats_df['class'].unique())}")
+        print(f"   Classes (active) : {sorted(stats_df['class'].unique())}")
         print(f"\n   Annotations per class:")
         for cls, cnt in stats_df['class'].value_counts().sort_index().items():
             print(f"      {cls}: {cnt}")
