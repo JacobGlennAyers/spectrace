@@ -36,7 +36,7 @@ This tool is particularly useful for creating training datasets for machine lear
 
 ⚠️ **IMPORTANT: You must install GIMP version 2.10.x** - The `gimpformats` Python library used by Spectrace is only compatible with GIMP 2.10 and will not work with GIMP 3.0 or later versions.
 
-*Linux (Ubuntu/Debian):*
+*Linux (Ubuntu/Debian):* (OUT OF DATE -- UPDATE SOLUTION FOR LINUX COMING
 ```bash
 sudo apt update
 sudo apt install gimp=2.10.*
@@ -55,19 +55,15 @@ flatpak run org.gimp.GIMP//2.10
 3. Accept default settings unless you have specific preferences
 4. **Do not upgrade to GIMP 3.0** if prompted - this will break compatibility with Spectrace
 
-*macOS:*
-```bash
-# Using Homebrew with version pinning
-brew install gimp@2.10
-```
 
-If Homebrew doesn't have GIMP 2.10 available, download from the .dmg from this [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) or [FossHub archive](https://www.fosshub.com/GIMP-old.html).
+*MacOS:*
+Download from the .dmg from this [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) or [FossHub archive](https://www.fosshub.com/GIMP-old.html).
 
 ### Setting Up Spectrace
 
 1. **Clone or download this repository:**
 ```bash
-git clone https://github.com/yourusername/spectrace.git
+git clone https://github.com/JacobGlennAyers/spectrace.git
 cd spectrace
 ```
 
