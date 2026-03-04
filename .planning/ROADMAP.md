@@ -27,11 +27,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Plugin loads layer structure (group names, layer names, colors) from an external JSON/YAML template file -- not from hardcoded Python constants
   2. Changing the template file changes the layers that get created -- no code edits required to define a new species template
   3. Existing orca annotation workflow still works end-to-end (spectrogram generation, layer injection, HDF5 export) after the refactor
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- Create YAML template, spectrace/core/templates.py module, and test suite
+- [ ] 01-02-PLAN.md -- Refactor all consumers (GIMP plugin, utils.py, hdf5_utils.py) to use templates.py
 
 ### Phase 2: Project Creation Wizard
 **Goal**: A biologist opens GIMP, clicks one menu item, points at a WAV file, and gets a fully configured annotation workspace with correct layers, tool settings, and metadata -- no manual steps
@@ -85,7 +85,7 @@ Phases execute in numeric order: 1 > 2 > 3 > 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Foundations | 0/TBD | Not started | - |
+| 1. Core Foundations | 0/2 | Planning complete | - |
 | 2. Project Creation Wizard | 0/TBD | Not started | - |
 | 3. Annotation Guardrails | 0/TBD | Not started | - |
 | 4. In-GIMP Export | 0/TBD | Not started | - |
