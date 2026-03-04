@@ -13,18 +13,18 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Wizard
 
-- [ ] **WIZ-01**: User can access annotation workflow via Filters → Bioacoustics → New Spectrogram Annotation menu item in GIMP
+- [ ] **WIZ-01**: User can access annotation workflow via Filters > Bioacoustics > New Spectrogram Annotation menu item in GIMP
 - [ ] **WIZ-02**: User can select a WAV file and optionally specify start/stop time via file chooser dialog
 - [ ] **WIZ-03**: User can select a species preset (orca default) from dropdown that configures spectrogram parameters
 - [ ] **WIZ-04**: Spectrogram is generated from WAV file by calling spectrace core Python (not inside GIMP)
 - [ ] **WIZ-05**: Template layers are automatically selected and injected into the workspace with correct names (no " copy" suffix)
 - [ ] **WIZ-06**: All layers are automatically resized to match image dimensions with zero tolerance for mismatches
 - [ ] **WIZ-07**: Drawing tool is auto-configured (pencil, size 1, hardness 100, dynamics off) on wizard completion
-- [ ] **WIZ-08**: FFT params, audio path, template version, and pixel↔Hz mapping are stored as GIMP image parasites
+- [ ] **WIZ-08**: FFT params, audio path, template version, and pixel-to-Hz mapping are stored as GIMP image parasites
 
 ### Export
 
-- [ ] **EXP-01**: User can export annotations via Filters → Bioacoustics → Export Annotations menu item in GIMP
+- [ ] **EXP-01**: User can export annotations via Filters > Bioacoustics > Export Annotations menu item in GIMP
 - [ ] **EXP-02**: Export validates layer names and dimensions before proceeding, rejecting invalid state
 - [ ] **EXP-03**: Export delegates to spectrace core Python for HDF5, Excel, and visualization generation
 
@@ -77,27 +77,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | — | Pending |
-| WIZ-01 | — | Pending |
-| WIZ-02 | — | Pending |
-| WIZ-03 | — | Pending |
-| WIZ-04 | — | Pending |
-| WIZ-05 | — | Pending |
-| WIZ-06 | — | Pending |
-| WIZ-07 | — | Pending |
-| WIZ-08 | — | Pending |
-| EXP-01 | — | Pending |
-| EXP-02 | — | Pending |
-| EXP-03 | — | Pending |
-| GUARD-01 | — | Pending |
-| GUARD-02 | — | Pending |
-| GUARD-03 | — | Pending |
+| FOUND-01 | Phase 1 | Pending |
+| WIZ-01 | Phase 2 | Pending |
+| WIZ-02 | Phase 2 | Pending |
+| WIZ-03 | Phase 2 | Pending |
+| WIZ-04 | Phase 2 | Pending |
+| WIZ-05 | Phase 2 | Pending |
+| WIZ-06 | Phase 2 | Pending |
+| WIZ-07 | Phase 2 | Pending |
+| WIZ-08 | Phase 2 | Pending |
+| EXP-01 | Phase 4 | Pending |
+| EXP-02 | Phase 4 | Pending |
+| EXP-03 | Phase 4 | Pending |
+| GUARD-01 | Phase 3 | Pending |
+| GUARD-02 | Phase 3 | Pending |
+| GUARD-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-04 after initial definition*
+*Last updated: 2026-03-04 after roadmap creation*
