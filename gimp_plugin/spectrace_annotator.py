@@ -7,6 +7,12 @@ Constrains GIMP's interface for bioacoustics spectrogram annotation.
 Automates template layer setup and provides a simplified control panel
 so annotators only need to: pick a layer, draw, and save.
 
+Features:
+  - Open WAV files directly in GIMP (File > Open, select .wav)
+  - Dynamic layer structure from any .xcf template
+  - Auto foreground color switching per layer
+  - Tool enforcement (pencil, 1px, hardness 100)
+
 Install: Copy to GIMP's plug-ins directory and make executable.
   Linux:   ~/.config/GIMP/2.10/plug-ins/
   macOS:   ~/Library/Application Support/GIMP/2.10/plug-ins/
@@ -22,8 +28,14 @@ import gtk
 import gobject
 import os
 import sys
+import json
+import subprocess
+import colorsys
 
-# Debug log — check /tmp/spectrace_debug.log if colors misbehave
+# ============================================================
+# DEBUG LOGGING
+# ============================================================
+
 _DEBUG = True
 _LOG_PATH = "/tmp/spectrace_debug.log"
 
@@ -37,15 +49,91 @@ def _log(msg):
         pass
 
 # ============================================================
-# CONSTANTS
+# CONFIGURATION
 # ============================================================
 
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "2.0.0"
+
+CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".spectrace", "config.json")
+
+DEFAULT_CONFIG = {
+    "spectrace_root": "",
+    "python3_path": "",
+    "default_nfft": 2048,
+    "default_grayscale": True,
+    "default_project_dir": "projects",
+}
+
+def load_config():
+    """Load spectrace configuration from ~/.spectrace/config.json."""
+    config = dict(DEFAULT_CONFIG)
+    if os.path.isfile(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                user_config = json.load(f)
+            config.update(user_config)
+        except Exception as e:
+            _log("Config load error: %s" % str(e))
+    return config
+
+
+def find_python3():
+    """Find a Python 3 interpreter with the spectrace conda environment."""
+    config = load_config()
+
+    # 1. Explicit config
+    if config.get("python3_path") and os.path.isfile(config["python3_path"]):
+        return config["python3_path"]
+
+    # 2. Common conda paths
+    home = os.path.expanduser("~")
+    conda_dirs = [
+        os.path.join(home, "miniconda3"),
+        os.path.join(home, "anaconda3"),
+        os.path.join(home, "miniforge3"),
+        os.path.join(home, "mambaforge"),
+        "/opt/miniconda3",
+        "/opt/anaconda3",
+        "/opt/miniforge3",
+        "/usr/local/miniconda3",
+    ]
+    for conda_dir in conda_dirs:
+        p = os.path.join(conda_dir, "envs", "spectrace", "bin", "python")
+        if os.path.isfile(p):
+            return p
+
+    # 3. Fallback
+    return "python3"
+
+
+def find_spectrace_root():
+    """Find the spectrace project root directory."""
+    config = load_config()
+
+    if config.get("spectrace_root") and os.path.isdir(config["spectrace_root"]):
+        return config["spectrace_root"]
+
+    # Try common locations
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, "spectrace"),
+        os.path.join(home, "Documents", "spectrace"),
+        os.path.join(home, "projects", "spectrace"),
+    ]
+    for c in candidates:
+        bridge = os.path.join(c, "spectrace_wav_bridge.py")
+        if os.path.isfile(bridge):
+            return c
+
+    return ""
+
+
+# ============================================================
+# FALLBACK CONSTANTS (orca template, used when no XCF selected)
+# ============================================================
+
 ROOT_GROUP_NAME = "OrcinusOrca_FrequencyContours"
 
-# Layer structure: (name, parent_group_or_None, "group"|"layer")
-# Order = XCF stack order (first item = topmost in layers panel).
-# Must match orca_template.xcf exactly for downstream pipeline compatibility.
 LAYER_STRUCTURE = [
     ("Heterodynes", None, "group"),
     ("unsure", "Heterodynes", "layer"),
@@ -78,8 +166,6 @@ LAYER_STRUCTURE = [
     ("unsure_LFC", None, "layer"),
 ]
 
-# UI-friendly layer list organized by section for radio buttons.
-# Values are path-qualified names matching extract_layers_from_xcf() output.
 LAYER_SECTIONS = [
     ("Main Layers", [
         "f0_LFC",
@@ -117,7 +203,6 @@ LAYER_SECTIONS = [
     ]),
 ]
 
-# Color mapping: distinct color per layer (RGB tuples).
 LAYER_COLORS = {
     "Cetacean_AdditionalContours/f0_CetaceanAdditionalContours": (229, 45, 45),
     "Cetacean_AdditionalContours/harmonics_CetaceanAdditionalContours": (229, 88, 45),
@@ -158,22 +243,112 @@ HARD_BRUSH_CANDIDATES = [
 
 
 # ============================================================
+# DYNAMIC TEMPLATE EXTRACTION
+# ============================================================
+
+def extract_template_structure(template_image):
+    """
+    Extract layer structure from a GIMP template image.
+
+    Opens the first layer group found (the annotation root) and reads
+    its hierarchy. Supports two levels: root group with subgroups
+    containing layers.
+
+    Returns:
+        root_name:       Name of the root layer group
+        layer_structure: List of (name, parent_name, "group"|"layer") tuples
+        layer_sections:  List of (section_name, [qualified_layer_names]) for UI
+        all_layer_names: Ordered list of path-qualified layer names
+    """
+    # Find root annotation group (first group in the template)
+    root_group = None
+    for layer in template_image.layers:
+        if pdb.gimp_item_is_group(layer):
+            root_group = layer
+            break
+
+    if root_group is None:
+        return None, [], [], []
+
+    root_name = root_group.name
+    layer_structure = []
+    all_layer_names = []
+    layer_sections = []
+    main_layers = []
+
+    for child in root_group.children:
+        name = child.name
+
+        if pdb.gimp_item_is_group(child):
+            layer_structure.append((name, None, "group"))
+            section_layers = []
+
+            for sub in child.children:
+                sub_name = sub.name
+                layer_structure.append((sub_name, name, "layer"))
+                qualified = name + "/" + sub_name
+                section_layers.append(qualified)
+                all_layer_names.append(qualified)
+
+            if section_layers:
+                layer_sections.append((name, section_layers))
+        else:
+            layer_structure.append((name, None, "layer"))
+            main_layers.append(name)
+            all_layer_names.append(name)
+
+    if main_layers:
+        layer_sections.insert(0, ("Main Layers", main_layers))
+
+    return root_name, layer_structure, layer_sections, all_layer_names
+
+
+def generate_layer_colors(layer_names):
+    """
+    Generate visually distinct colors for each layer using HSV distribution.
+
+    Args:
+        layer_names: Ordered list of path-qualified layer names
+
+    Returns:
+        Dict mapping layer name -> (R, G, B) tuple (0-255)
+    """
+    n = len(layer_names)
+    colors = {}
+    for i, name in enumerate(layer_names):
+        hue = float(i) / max(n, 1)
+        r, g, b = colorsys.hsv_to_rgb(hue, 0.8, 0.9)
+        colors[name] = (int(r * 255), int(g * 255), int(b * 255))
+    return colors
+
+
+# ============================================================
 # LAYER CREATION
 # ============================================================
 
-def find_existing_root_group(image):
+def find_existing_root_group(image, root_name):
     """Return the existing annotation root group, or None."""
     for layer in image.layers:
-        if layer.name == ROOT_GROUP_NAME:
+        if layer.name == root_name:
             return layer
     return None
 
 
-def create_template_layers(image):
+def create_template_layers(image, root_name=ROOT_GROUP_NAME, structure=None):
     """
     Programmatically create the full annotation layer hierarchy.
+
+    Args:
+        image:      Target GIMP image
+        root_name:  Name for the root layer group
+        structure:  List of (name, parent_name, type) tuples.
+                    Defaults to LAYER_STRUCTURE if None.
+
     Returns the root layer group.
     """
+    if structure is None:
+        structure = LAYER_STRUCTURE
+
     width = image.width
     height = image.height
 
@@ -182,7 +357,7 @@ def create_template_layers(image):
     try:
         # Create root group
         root_group = pdb.gimp_layer_group_new(image)
-        pdb.gimp_layer_set_name(root_group, ROOT_GROUP_NAME)
+        pdb.gimp_layer_set_name(root_group, root_name)
         pdb.gimp_image_insert_layer(image, root_group, None, 0)
 
         # Track subgroups and their insertion positions
@@ -190,7 +365,7 @@ def create_template_layers(image):
         position_in_root = 0
         position_in_group = {}
 
-        for name, parent_name, item_type in LAYER_STRUCTURE:
+        for name, parent_name, item_type in structure:
             if item_type == "group":
                 subgroup = pdb.gimp_layer_group_new(image)
                 pdb.gimp_layer_set_name(subgroup, name)
@@ -267,7 +442,6 @@ def find_hard_brush():
             except Exception:
                 pass
 
-    # Last resort: use whatever is currently selected
     return None
 
 
@@ -275,41 +449,37 @@ def set_foreground_color(r, g, b):
     """Set foreground color using gimpcolor.RGB (best wire serialization)."""
     _log("set_foreground_color(%d, %d, %d)" % (r, g, b))
 
-    # Method 1: gimpcolor.RGB with pdb.gimp_context_set_foreground
     try:
         color = gimpcolor.RGB(r / 255.0, g / 255.0, b / 255.0)
         pdb.gimp_context_set_foreground(color)
-        _log("  method 1 (gimpcolor.RGB float) succeeded")
+        _log("  gimpcolor.RGB float succeeded")
         return
     except Exception as e:
-        _log("  method 1 failed: %s" % str(e))
+        _log("  gimpcolor.RGB float failed: %s" % str(e))
 
-    # Method 2: gimpcolor.RGB with integer 0-255 range
     try:
         color = gimpcolor.RGB(r, g, b)
         pdb.gimp_context_set_foreground(color)
-        _log("  method 2 (gimpcolor.RGB int) succeeded")
+        _log("  gimpcolor.RGB int succeeded")
         return
     except Exception as e:
-        _log("  method 2 failed: %s" % str(e))
+        _log("  gimpcolor.RGB int failed: %s" % str(e))
 
-    # Method 3: gimp.set_foreground with three ints
     try:
         gimp.set_foreground(r, g, b)
-        _log("  method 3 (gimp.set_foreground) succeeded")
+        _log("  gimp.set_foreground succeeded")
         return
     except Exception as e:
-        _log("  method 3 failed: %s" % str(e))
+        _log("  gimp.set_foreground failed: %s" % str(e))
 
-    # Method 4: tuple form
     try:
         pdb.gimp_context_set_foreground((r, g, b))
-        _log("  method 4 (tuple) succeeded")
+        _log("  tuple form succeeded")
         return
     except Exception as e:
-        _log("  method 4 failed: %s" % str(e))
+        _log("  tuple form failed: %s" % str(e))
 
-    _log("  ALL METHODS FAILED")
+    _log("  ALL COLOR METHODS FAILED")
 
 
 def enforce_pencil_settings():
@@ -334,24 +504,33 @@ def enforce_eraser_settings():
 # ============================================================
 
 class SpectraceBackgroundMonitor(object):
-    """Hidden background monitor — polls GIMP's active layer and auto-switches color."""
+    """Hidden background monitor -- polls GIMP's active layer and
+    continuously enforces brush/opacity/dynamics settings so tool
+    switches (pencil, eraser, or accidental changes) are corrected."""
 
-    def __init__(self, image, layer_map):
+    def __init__(self, image, layer_map, layer_colors=None):
         self.image = image
         self.layer_map = layer_map
+        self.layer_colors = layer_colors if layer_colors is not None else LAYER_COLORS
         self.current_layer_name = None
+        self._last_tool = None        # track tool switches
+        self._eraser_size = 10.0      # remembered eraser brush size
 
-        # Poll GIMP's active layer every 200ms
-        self._timer_id = gobject.timeout_add(200, self._poll_active_layer)
+        # Poll every 200ms
+        self._timer_id = gobject.timeout_add(200, self._poll)
 
-    def _poll_active_layer(self):
-        """Check GIMP's active layer and switch foreground color if it changed."""
+    def _poll(self):
+        """Check active layer and enforce tool settings every cycle."""
         try:
+            self._enforce_settings()
+
+            # --- Layer change detection ---
             gimp_active = self.image.active_layer
             if gimp_active is not None:
                 gimp_lname = self._resolve_layer_path(gimp_active)
             else:
                 gimp_lname = None
+
             if gimp_lname is not None and gimp_lname != self.current_layer_name:
                 self._switch_to_layer(gimp_lname)
         except Exception:
@@ -359,16 +538,68 @@ class SpectraceBackgroundMonitor(object):
 
         return True  # Keep polling
 
+    def _enforce_settings(self):
+        """Enforce tool settings. Pencil is locked to 1px. Eraser size is
+        remembered and restored across tool switches."""
+        try:
+            is_pencil = True
+            try:
+                method = pdb.gimp_context_get_paint_method()
+                is_pencil = (method == "gimp-pencil")
+            except Exception:
+                pass
+
+            current_size = pdb.gimp_context_get_brush_size()
+
+            # Detect tool switch
+            tool_key = "pencil" if is_pencil else "eraser"
+            if tool_key != self._last_tool:
+                if self._last_tool == "eraser":
+                    # Leaving eraser — save its size before we set 1px
+                    self._eraser_size = current_size
+                if tool_key == "eraser":
+                    # Entering eraser — restore saved size
+                    pdb.gimp_context_set_brush_size(self._eraser_size)
+                self._last_tool = tool_key
+
+            # --- Always enforced (pencil AND eraser) ---
+            if pdb.gimp_context_get_opacity() != 100.0:
+                pdb.gimp_context_set_opacity(100.0)
+
+            try:
+                if pdb.gimp_context_get_dynamics() != "Dynamics Off":
+                    pdb.gimp_context_set_dynamics("Dynamics Off")
+            except Exception:
+                pass
+
+            if pdb.gimp_context_get_paint_mode() != LAYER_MODE_NORMAL:
+                pdb.gimp_context_set_paint_mode(LAYER_MODE_NORMAL)
+
+            try:
+                current_brush = pdb.gimp_context_get_brush()
+                lower = current_brush.lower() if current_brush else ""
+                if "pixel" not in lower and "hardness 100" not in lower:
+                    find_hard_brush()
+            except Exception:
+                pass
+
+            # --- Pencil only: lock brush size to 1px ---
+            if is_pencil:
+                if pdb.gimp_context_get_brush_size() != 1.0:
+                    pdb.gimp_context_set_brush_size(1.0)
+            else:
+                # Eraser: track user's size changes for next restore
+                self._eraser_size = pdb.gimp_context_get_brush_size()
+        except Exception:
+            pass
+
     def _switch_to_layer(self, lname):
-        """Apply a layer switch: set active layer, color, and pencil settings."""
+        """Apply a layer switch: reset to pencil defaults and update color."""
         self.current_layer_name = lname
         _log("POLL: switching to %s" % lname)
 
-        # Enforce pencil settings
-        enforce_pencil_settings()
-
         # Set this layer's foreground color
-        color = LAYER_COLORS.get(lname, (255, 255, 255))
+        color = self.layer_colors.get(lname, (255, 255, 255))
         r, g, b = color
         fg = gimpcolor.RGB(r / 255.0, g / 255.0, b / 255.0)
         pdb.gimp_context_set_foreground(fg)
@@ -378,7 +609,11 @@ class SpectraceBackgroundMonitor(object):
         """Get path-qualified name for a GIMP layer (e.g. 'Heterodynes/5')."""
         parent = pdb.gimp_item_get_parent(layer)
         if parent is not None and parent.name != ROOT_GROUP_NAME:
-            return parent.name + "/" + layer.name
+            # Check if we're dealing with a dynamic root name
+            grandparent = pdb.gimp_item_get_parent(parent)
+            if grandparent is not None:
+                # parent is a subgroup inside the root — use parent.name/layer.name
+                return parent.name + "/" + layer.name
         return layer.name
 
     def stop(self):
@@ -389,21 +624,261 @@ class SpectraceBackgroundMonitor(object):
 
 
 # ============================================================
+# WAV FILE LOAD HANDLER
+# ============================================================
+
+def _find_existing_spectrogram(project_dir, clip_basename):
+    """
+    Search project_dir for existing projects matching this clip.
+    Returns the spectrogram PNG path from the latest project, or None.
+
+    Projects follow the naming convention: <clip_basename>_<index>/
+    Each contains: <clip_basename>_<index>_spectrogram.png
+    """
+    if not os.path.isdir(project_dir):
+        return None
+
+    best_idx = -1
+    best_png = None
+
+    try:
+        for entry in os.listdir(project_dir):
+            entry_path = os.path.join(project_dir, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            if not entry.startswith(clip_basename + "_"):
+                continue
+            suffix = entry[len(clip_basename) + 1:]
+            try:
+                idx = int(suffix)
+            except ValueError:
+                continue
+            # Check for spectrogram PNG
+            png_name = "%s_%d_spectrogram.png" % (clip_basename, idx)
+            png_path = os.path.join(entry_path, png_name)
+            if os.path.isfile(png_path) and idx > best_idx:
+                best_idx = idx
+                best_png = png_path
+    except OSError:
+        return None
+
+    return best_png
+
+
+def load_wav(filename, raw_filename):
+    """
+    GIMP file load handler for WAV files.
+
+    When a user selects a .wav file in File > Open, this handler:
+    1. Checks for an existing spectrogram in the projects directory
+    2. If none found, calls spectrace_wav_bridge.py to generate one
+    3. Loads the PNG into GIMP as a new image
+    """
+    _log("=== load_wav called: %s ===" % filename)
+
+    try:
+        pdb.gimp_progress_init("Loading spectrogram...", None)
+    except Exception:
+        pass
+
+    config = load_config()
+    spectrace_root = find_spectrace_root()
+
+    # Determine output directory
+    project_dir = config.get("default_project_dir", "projects")
+    if not os.path.isabs(project_dir):
+        project_dir = os.path.join(spectrace_root, project_dir)
+
+    # Derive clip basename from the WAV filename
+    clip_basename = os.path.splitext(os.path.basename(filename))[0]
+
+    # Check for existing spectrogram first
+    png_path = _find_existing_spectrogram(project_dir, clip_basename)
+
+    if png_path:
+        _log("Found existing spectrogram: %s" % png_path)
+    else:
+        # No existing project — generate a new spectrogram
+        _log("No existing spectrogram for '%s', generating..." % clip_basename)
+
+        python3 = find_python3()
+        bridge_script = os.path.join(spectrace_root, "spectrace_wav_bridge.py")
+        if not os.path.isfile(bridge_script):
+            gimp.message(
+                "Spectrace: Cannot find spectrace_wav_bridge.py\n\n"
+                "Configure spectrace_root in:\n  %s\n\n"
+                "Or install spectrace to ~/spectrace/" % CONFIG_PATH
+            )
+            raise RuntimeError("spectrace_wav_bridge.py not found at: %s" % bridge_script)
+
+        nfft = config.get("default_nfft", 2048)
+        grayscale = config.get("default_grayscale", True)
+
+        cmd = [
+            python3, bridge_script,
+            "--wav", filename,
+            "--output-dir", project_dir,
+            "--nfft", str(nfft),
+        ]
+        if grayscale:
+            cmd.append("--grayscale")
+
+        _log("Running: %s" % " ".join(cmd))
+
+        try:
+            pdb.gimp_progress_update(0.1)
+        except Exception:
+            pass
+
+        # Build a clean environment for Python 3 subprocess.
+        # GIMP sets PYTHONHOME/PYTHONPATH to its bundled Python 2.7, which
+        # fatally breaks any external Python 3 interpreter.
+        clean_env = dict(os.environ)
+        for key in ["PYTHONHOME", "PYTHONPATH", "PYTHONDONTWRITEBYTECODE",
+                    "PYTHONSTARTUP", "PYTHONCASEOK"]:
+            clean_env.pop(key, None)
+        conda_bin = os.path.dirname(python3)
+        if conda_bin not in clean_env.get("PATH", ""):
+            clean_env["PATH"] = conda_bin + ":" + clean_env.get("PATH", "")
+
+        # Call the bridge script
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=spectrace_root,
+                env=clean_env,
+            )
+            stdout, stderr = proc.communicate()
+
+            if proc.returncode != 0:
+                error_msg = stderr.strip() if stderr else "Unknown error"
+                _log("Bridge script failed (rc=%d): %s" % (proc.returncode, error_msg))
+                gimp.message(
+                    "Spectrace: Spectrogram generation failed.\n\n"
+                    "Error: %s\n\n"
+                    "Check that the spectrace conda environment is set up:\n"
+                    "  conda activate spectrace" % error_msg
+                )
+                raise RuntimeError("Bridge script failed: %s" % error_msg)
+
+            result = json.loads(stdout.strip())
+            png_path = result["spectrogram_path"]
+            _log("Generated spectrogram: %s" % png_path)
+
+        except (ValueError, KeyError) as e:
+            _log("JSON parse error: %s / stdout: %s" % (str(e), stdout))
+            gimp.message("Spectrace: Could not parse bridge script output.\n%s" % str(e))
+            raise RuntimeError("Bridge script output parse error")
+
+    try:
+        pdb.gimp_progress_update(0.8)
+    except Exception:
+        pass
+
+    # Load the generated PNG into a new GIMP image.
+    # We avoid pdb.gimp_file_load() here because calling one file load
+    # handler from inside another causes reentrancy failures in GIMP 2.10.
+    # Instead, create a blank image and load the PNG as a layer.
+    _log("Loading PNG into GIMP: %s (exists=%s)" % (png_path, os.path.isfile(png_path)))
+    try:
+        # Read PNG dimensions from file header
+        import struct
+        with open(png_path, "rb") as f:
+            f.read(16)  # 8-byte PNG sig + 4-byte IHDR len + 4-byte IHDR tag
+            w = struct.unpack(">I", f.read(4))[0]
+            h = struct.unpack(">I", f.read(4))[0]
+        _log("PNG dimensions: %dx%d" % (w, h))
+
+        img = gimp.Image(w, h, RGB)
+        layer = pdb.gimp_file_load_layer(img, png_path)
+        _log("Layer loaded: %s" % str(layer))
+        pdb.gimp_image_insert_layer(img, layer, None, 0)
+        img.flatten()
+        pdb.gimp_image_set_filename(img, png_path)
+    except Exception as e:
+        _log("PNG load failed: %s" % str(e))
+        import traceback
+        _log(traceback.format_exc())
+        gimp.message("Spectrace: Failed to load spectrogram PNG:\n%s" % str(e))
+        raise
+
+    try:
+        pdb.gimp_progress_end()
+    except Exception:
+        pass
+
+    _log("WAV loaded successfully as spectrogram: %s" % png_path)
+    return img
+
+
+def register_load_handlers():
+    """Called during GIMP's query phase to register WAV as a loadable format."""
+    gimp.register_load_handler("file-wav-spectrogram-load", "wav,WAV", "")
+
+
+# ============================================================
 # PLUGIN ENTRY POINTS
 # ============================================================
 
-def spectrace_setup(image, drawable):
-    """Main entry point: set up layers and open the control panel."""
-    _log("=== spectrace_setup called (v2 polling) ===")
+def spectrace_setup(image, drawable, template_xcf=""):
+    """
+    Main entry point: set up annotation layers and start the background monitor.
+
+    If template_xcf is provided, layers are extracted dynamically from the
+    template XCF file. Otherwise falls back to the built-in orca template.
+    """
+    _log("=== spectrace_setup called (v%s, dynamic template) ===" % PLUGIN_VERSION)
+
     try:
         pdb.gimp_progress_init("Setting up Spectrace annotation...", None)
     except Exception:
         pass
 
-    # Check for existing layer group
-    root_group = find_existing_root_group(image)
+    # Resolve template
+    use_root = ROOT_GROUP_NAME
+    use_structure = LAYER_STRUCTURE
+    use_sections = LAYER_SECTIONS
+    use_colors = LAYER_COLORS
+
+    if template_xcf and os.path.isfile(template_xcf):
+        _log("Loading template XCF: %s" % template_xcf)
+        try:
+            template_img = pdb.gimp_file_load(template_xcf, template_xcf)
+
+            root_name, dyn_structure, dyn_sections, layer_names = \
+                extract_template_structure(template_img)
+
+            pdb.gimp_image_delete(template_img)
+
+            if root_name is not None and dyn_structure:
+                use_root = root_name
+                use_structure = dyn_structure
+                use_sections = dyn_sections
+                use_colors = generate_layer_colors(layer_names)
+                _log("Template loaded: root=%s, %d layers, %d sections" % (
+                    root_name, len(layer_names), len(dyn_sections)))
+            else:
+                _log("Template had no layer groups, using default orca template")
+                gimp.message(
+                    "Spectrace: No layer groups found in template.\n"
+                    "Using default orca template."
+                )
+        except Exception as e:
+            _log("Template load failed: %s" % str(e))
+            gimp.message(
+                "Spectrace: Could not load template XCF:\n%s\n\n"
+                "Using default orca template." % str(e)
+            )
+    else:
+        if template_xcf:
+            _log("Template file not found: %s" % template_xcf)
+
+    # Check for existing annotation group
+    root_group = find_existing_root_group(image, use_root)
     if root_group is None:
-        root_group = create_template_layers(image)
+        root_group = create_template_layers(image, use_root, use_structure)
         gimp.message("Spectrace: Created annotation layer structure.")
     else:
         gimp.message("Spectrace: Using existing annotation layers.")
@@ -414,62 +889,60 @@ def spectrace_setup(image, drawable):
     if not layer_map:
         gimp.message(
             "Spectrace: No layers found in '%s' group. "
-            "Something went wrong during layer creation." % ROOT_GROUP_NAME
+            "Something went wrong during layer creation." % use_root
         )
         return
 
     # Enforce tool settings
     enforce_pencil_settings()
 
-    # Set initial foreground color to f0_LFC (red)
-    first_layer_name = LAYER_SECTIONS[0][1][0]  # "f0_LFC"
-    initial_color = LAYER_COLORS.get(first_layer_name, (255, 0, 0))
-    _log("Setting initial color for %s: %s" % (first_layer_name, str(initial_color)))
-    set_foreground_color(*initial_color)
+    # Set initial foreground color
+    first_layer_name = None
+    if use_sections and use_sections[0][1]:
+        first_layer_name = use_sections[0][1][0]
+    elif layer_map:
+        first_layer_name = list(layer_map.keys())[0]
 
-    # Verify it took effect
+    if first_layer_name:
+        initial_color = use_colors.get(first_layer_name, (255, 0, 0))
+        _log("Setting initial color for %s: %s" % (first_layer_name, str(initial_color)))
+        set_foreground_color(*initial_color)
+
+    # Verify color
     try:
         current = gimp.get_foreground()
         _log("Initial fg readback: %s" % str(current))
     except Exception as e:
         _log("Initial fg readback failed: %s" % str(e))
 
-    _log("STEP A: about to import subprocess")
-    import subprocess
-    _log("STEP B: subprocess imported")
-
+    # macOS: switch to pencil tool via keystroke
     if sys.platform == "darwin":
-        _log("STEP C: macOS detected, trying osascript")
         try:
             subprocess.Popen([
                 'osascript', '-e',
                 'tell application "System Events" to keystroke "2"'
             ])
-            _log("STEP D: osascript launched")
         except Exception as e:
-            _log("STEP D: osascript failed: %s" % str(e))
+            _log("osascript failed: %s" % str(e))
 
-    _log("STEP E: about to call progress_end")
     try:
         pdb.gimp_progress_end()
-        _log("STEP F: progress_end OK")
-    except Exception as e:
-        _log("STEP F: progress_end skipped: %s" % str(e))
+    except Exception:
+        pass
 
-    _log("STEP G: starting background monitor")
+    # Start background monitor with dynamic colors
+    _log("Starting background monitor")
     try:
-        monitor = SpectraceBackgroundMonitor(image, layer_map)
-        _log("STEP H: monitor created, entering gtk.main()")
+        monitor = SpectraceBackgroundMonitor(image, layer_map, use_colors)
+        _log("Monitor created, entering gtk.main()")
     except Exception as e:
-        _log("STEP H: monitor creation FAILED: %s" % str(e))
+        _log("Monitor creation FAILED: %s" % str(e))
         import traceback
         _log(traceback.format_exc())
         return
 
-    # gtk.main() keeps the PDB wire alive so timer callbacks can
-    # make PDB calls. Runs until GIMP closes or image is closed.
     gtk.main()
-    _log("STEP I: gtk.main() returned, plugin done")
+    _log("gtk.main() returned, plugin done")
 
 
 def spectrace_reset_tools(image, drawable):
@@ -482,12 +955,34 @@ def spectrace_reset_tools(image, drawable):
 # REGISTRATION
 # ============================================================
 
+# --- WAV File Load Handler ---
+register(
+    "file-wav-spectrogram-load",
+    "Load WAV file as spectrogram",
+    "Generates a spectrogram from a WAV audio file using the spectrace "
+    "Python toolkit (librosa) and loads the result as a GIMP image.",
+    "Spectrace Contributors",
+    "MIT License",
+    "2025",
+    "WAV Spectrogram",
+    None,
+    [
+        (PF_STRING, "filename", "The filename to load", None),
+        (PF_STRING, "raw-filename", "The raw filename to load", None),
+    ],
+    [(PF_IMAGE, "image", "Output image")],
+    load_wav,
+    on_query=register_load_handlers,
+    menu="<Load>",
+)
+
+# --- Setup Annotation (with dynamic template support) ---
 register(
     "python-fu-spectrace-setup",
-    "Spectrace: Setup annotation layers and open control panel",
-    "Creates the annotation layer structure on the current image and opens "
-    "a simplified annotation control panel with layer switching, tool "
-    "enforcement, and save functionality.",
+    "Spectrace: Setup annotation layers from template",
+    "Creates the annotation layer structure on the current image from a "
+    "template XCF file (or the built-in orca template if none selected) "
+    "and starts the background color monitor.",
     "Spectrace Contributors",
     "MIT License",
     "2025",
@@ -496,12 +991,14 @@ register(
     [
         (PF_IMAGE, "image", "Image", None),
         (PF_DRAWABLE, "drawable", "Drawable", None),
+        (PF_FILE, "template-xcf", "Template XCF file (empty = default orca)", ""),
     ],
     [],
     spectrace_setup,
     menu="<Image>/Filters/Spectrace",
 )
 
+# --- Reset Tools ---
 register(
     "python-fu-spectrace-reset-tools",
     "Spectrace: Reset tool settings",
