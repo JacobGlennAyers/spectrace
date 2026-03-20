@@ -37,12 +37,15 @@ This tool is particularly useful for creating training datasets for machine lear
 
 **macOS:**
 
-Download the `.dmg` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) or [FossHub GIMP archive](https://www.fosshub.com/GIMP-old.html).
+Download the `.dmg` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version). Alternatively:
+
+```bash
+brew install gimp@2.10
+```
 
 **Windows:**
 
 1. Download `gimp-2.10.30-setup.exe` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version)
-   - Alternative: [FossHub GIMP archive](https://www.fosshub.com/GIMP-old.html)
 2. Run the installer and accept default settings
 
 **Linux (Ubuntu/Debian):**
