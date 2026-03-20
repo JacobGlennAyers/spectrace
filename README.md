@@ -114,7 +114,7 @@ The installer automatically:
    - `Setup Annotation...`
    - `Reset Tool Settings`
 
-<!-- (PICTURE RECOMMENDED: Screenshot of the stripped-down GIMP interface after plugin installation, showing the Filters > Spectrace menu) -->
+![GIMP 2.10 with Spectrace plugin — Filters > Spectrace menu showing Setup Annotation and Reset Tool Settings](docs/images/gimp-spectrace-menu.png)
 
 If the Spectrace menu does not appear, see [Troubleshooting](#troubleshooting).
 
@@ -135,7 +135,7 @@ The Spectrace plugin eliminates all manual GIMP setup. The complete workflow is:
    - Creates a project folder in `projects/` with the spectrogram PNG and metadata
    - Loads the spectrogram into GIMP as a new image
 
-<!-- (PICTURE RECOMMENDED: Screenshot of GIMP's File > Open dialog with a .wav file selected, then the resulting spectrogram loaded in GIMP) -->
+![GIMP File > Open dialog with orca.wav selected, showing spectrogram preview](docs/images/gimp-open-wav.png)
 
 > **Tip:** You can open any WAV file from anywhere on your computer — it does not need to be in the `audio/` directory. The plugin will create the project folder for you automatically.
 
