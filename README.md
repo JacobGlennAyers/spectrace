@@ -384,30 +384,6 @@ OrcinusOrca_FrequencyContours/
 
 The template is designed for killer whale (orca) vocalizations but can be adapted for other species. See `templates/orca_template.yaml` for complete documentation with scientific references.
 
-### Multiple Projects per Audio File
-
-You may want to create multiple annotation passes for the same audio file:
-- Annotating different vocalizations within the same recording
-- Creating alternative annotation sets with different interpretations
-- Separating overlapping calls that require different layer configurations
-
-Each time you open the same WAV file in GIMP, the plugin reuses the latest project's spectrogram. To create a new project folder for a fresh annotation pass, run:
-
-```bash
-conda activate spectrace
-python start_project.py
-```
-
-Edit `start_project.py` to point to your audio file:
-
-```python
-audio_info = {
-    "clip_path": "audio/your_audio_file.wav",
-    "nfft": 2048,
-    "grayscale": True
-}
-```
-
 The script increments the project index automatically (`your_audio_file_0`, `your_audio_file_1`, etc.).
 
 ### Color Mapping
@@ -509,10 +485,6 @@ The `demos/` folder includes examples of common binary morphology operations (er
 - Test manually: `conda activate spectrace && python spectrace_wav_bridge.py --wav /path/to/file.wav --output-dir ./projects --nfft 2048 --grayscale`
 - Check the debug log at `/tmp/spectrace_debug.log` for detailed error messages
 
-### `No module named gtk`
-
-Your GIMP installation may be missing Python support. Use the official GIMP 2.10 build — third-party builds sometimes strip the Python-Fu component.
-
 ### Pencil Not Drawing
 
 - Use `Filters > Spectrace > Reset Tool Settings` to force correct settings
@@ -523,11 +495,6 @@ Your GIMP installation may be missing Python support. Use the official GIMP 2.10
 
 The plugin sets tool parameters via GIMP's API, but the tool options panel display may not update visually. The tool *behaves* correctly. Click `Filters > Spectrace > Reset Tool Settings` if unsure.
 
-### `gimpformats` Can't Read My XCF File
-
-- **Most common cause:** The file was opened or saved in GIMP 3.0
-- Solution: Use GIMP 2.10.x exclusively. Files saved in GIMP 3.0 may need to be recreated from scratch in 2.10
-- Verify: `Help > About` in GIMP should show 2.10.x
 
 ### Python Packages Not Found
 
@@ -537,12 +504,6 @@ conda env remove -n spectrace       # if corrupted
 conda env create -f environment.yml  # reinstall
 ```
 
-### Colors Look Wrong in Visualizations
-
-- Delete `layer_color_mapping.json` to regenerate color assignments
-- Specify a master template XCF for consistent colors
-
----
 
 ## Compatibility
 
@@ -553,8 +514,6 @@ conda env create -f environment.yml  # reinstall
 | **Operating Systems** | macOS, Linux (standard + Flatpak), Windows |
 | **gimpformats** | Only supports GIMP 2.10 XCF format |
 | **Plugin Python** | Uses GIMP 2.10's bundled Python 2.7 (separate from the conda environment) |
-
-> **Why not make Spectrace an official GIMP plugin?** GIMP 2.10 has no plugin registry or extension manager (the old registry.gimp.org was discontinued). GIMP 3.0 introduces an extension manager, but Spectrace requires GIMP 2.10 for `gimpformats` compatibility. The install-script approach is the standard distribution method for GIMP 2.10 plugins.
 
 ### File Formats
 
