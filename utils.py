@@ -43,8 +43,13 @@ def process_audio_project(project_folder: str, audio_dict: dict):
     audio_filename = os.path.basename(clip_path)
     copied_audio_path = os.path.join(out_dir, audio_filename)
     shutil.copy2(clip_path, copied_audio_path)
-    # Load audio
-    y, sr = librosa.load(clip_path, sr=None)
+    # Load audio (with optional segment extraction for CallMark imports)
+    load_kwargs = {"sr": None}
+    if audio_dict.get("offset") is not None:
+        load_kwargs["offset"] = audio_dict["offset"]
+    if audio_dict.get("duration") is not None:
+        load_kwargs["duration"] = audio_dict["duration"]
+    y, sr = librosa.load(clip_path, **load_kwargs)
     # Compute linear-frequency magnitude spectrogram
     D = np.abs(librosa.stft(y, n_fft=nfft, window="hann"))
     S_db = librosa.amplitude_to_db(D, ref=np.max)
@@ -91,6 +96,117 @@ def find_index(folder, clip_basename):
         if project.startswith(clip_basename):
             ndx += 1
     return ndx
+
+
+def create_callmark_project(
+    project_root: str,
+    clip_path: str,
+    individual: str,
+    voc_index: int,
+    callmark_meta: dict,
+    nfft: int = 2048,
+    grayscale: bool = True,
+) -> dict:
+    """
+    Create a Spectrace project folder for a single CallMark vocalization segment.
+
+    Uses nested structure: projects/<clip_basename>/<individual>/v<NNN>/
+    Full WAV is copied to the recording-level folder (once).
+    Trimmed segment WAV + spectrogram are generated in the vocalization folder.
+
+    Args:
+        project_root:   Root project directory (e.g., "projects").
+        clip_path:      Path to the full WAV file.
+        individual:     Individual ID (e.g., "R3277").
+        voc_index:      Zero-based vocalization index within the filtered list.
+        callmark_meta:  Dict with onset_sec, offset_sec, duration_sec, and other CallMark fields.
+        nfft:           FFT window size for spectrogram generation.
+        grayscale:      Whether to generate grayscale spectrogram.
+
+    Returns:
+        Updated audio_dict with all project paths and metadata.
+    """
+    clip_basename = os.path.splitext(os.path.basename(clip_path))[0]
+    voc_name = "v%03d" % voc_index
+
+    # Build nested directory: projects/ZF/R3277/v000/
+    recording_dir = os.path.join(project_root, clip_basename)
+    individual_dir = os.path.join(recording_dir, individual)
+    voc_dir = os.path.join(individual_dir, voc_name)
+    os.makedirs(voc_dir, exist_ok=True)
+
+    # Copy full WAV to recording level (once)
+    recording_wav = os.path.join(recording_dir, os.path.basename(clip_path))
+    if not os.path.exists(recording_wav):
+        shutil.copy2(clip_path, recording_wav)
+
+    # Build audio_dict for process_audio_project-style spectrogram generation
+    # Extract exactly the onset-to-offset segment (same as whale workflow where
+    # the WAV file IS the segment — no padding, no trimming beyond the boundaries)
+    onset_sec = callmark_meta["onset_sec"]
+    offset_sec = callmark_meta["offset_sec"]
+    duration_sec = offset_sec - onset_sec
+
+    audio_dict = {
+        "clip_path": clip_path,
+        "nfft": nfft,
+        "grayscale": grayscale,
+        "offset": onset_sec,
+        "duration": duration_sec,
+        "callmark_meta": callmark_meta,
+    }
+
+    # Load audio segment
+    y, sr = librosa.load(clip_path, sr=None, offset=onset_sec, duration=duration_sec)
+
+    # Compute spectrogram
+    D = np.abs(librosa.stft(y, n_fft=nfft, window="hann"))
+    S_db = librosa.amplitude_to_db(D, ref=np.max)
+
+    # Save spectrogram PNG
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(S_db.shape[1] / 100, S_db.shape[0] / 100)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    librosa.display.specshow(
+        S_db, sr=sr, x_axis=None, y_axis=None,
+        cmap="gray" if grayscale else "magma"
+    )
+    spectrogram_path = os.path.join(voc_dir, voc_name + "_spectrogram.png")
+    plt.savefig(spectrogram_path, bbox_inches="tight", pad_inches=0)
+    plt.close(fig)
+
+    # Save trimmed segment WAV
+    import soundfile as sf
+    segment_wav_path = os.path.join(voc_dir, voc_name + "_segment.wav")
+    sf.write(segment_wav_path, y, sr)
+
+    # Build metadata
+    audio_dict.update({
+        "sample_rate": sr,
+        "noverlap": nfft // 2,
+        "spectrogram_path": spectrogram_path,
+        "copied_audio_path": recording_wav,
+        "segment_wav_path": segment_wav_path,
+        "project_folder": voc_dir,
+        "recording_folder": recording_dir,
+        "individual": individual,
+        "voc_name": voc_name,
+        "voc_index": voc_index,
+        "spectrogram_shape": S_db.shape,
+        "frequency_spacing": sr / 2 / (S_db.shape[0] - 1),
+        "time_per_pixel": librosa.frames_to_time(1, sr=sr, n_fft=nfft),
+    })
+
+    # Pickle metadata
+    with open(os.path.join(voc_dir, "metadata.pkl"), "wb") as f:
+        pickle.dump(audio_dict, f)
+    meta_for_csv = {k: v for k, v in audio_dict.items() if not isinstance(v, (dict, tuple))}
+    pd.DataFrame([meta_for_csv]).to_csv(os.path.join(voc_dir, "metadata.csv"), index=False)
+
+    print(f"  Created: {voc_dir}")
+    return audio_dict
 
 
 # =============================================================================
