@@ -70,7 +70,7 @@ def mode_spectrogram(args):
 
 def mode_parse_callmark(args):
     """Parse a CallMark Excel export and return vocalization metadata as JSON."""
-    from callmark_utils import parse_callmark_excel, get_unique_individuals
+    from callmark_utils import parse_callmark_excel, get_unique_individuals, get_unique_clusternames
 
     if not os.path.isfile(args.callmark_excel):
         print(json.dumps({"error": "Excel file not found: %s" % args.callmark_excel}), file=sys.stderr)
@@ -81,12 +81,14 @@ def mode_parse_callmark(args):
     try:
         vocalizations = parse_callmark_excel(args.callmark_excel)
         individuals = get_unique_individuals(vocalizations)
+        clusternames = get_unique_clusternames(vocalizations)
     finally:
         sys.stdout = real_stdout
 
     output = {
         "vocalizations": vocalizations,
         "individuals": individuals,
+        "clusternames": clusternames,
         "total_count": len(vocalizations),
     }
     print(json.dumps(output))
@@ -107,10 +109,11 @@ def mode_segment_spectrogram(args):
     real_stdout = sys.stdout
     sys.stdout = sys.stderr
     try:
+        subfolder = args.subfolder or args.individual or "unknown"
         result = create_callmark_project(
             project_root=args.output_dir,
             clip_path=args.wav,
-            individual=args.individual,
+            subfolder=subfolder,
             voc_index=args.voc_index,
             callmark_meta=callmark_meta,
             nfft=args.nfft,
@@ -148,6 +151,7 @@ def main():
     parser.add_argument("--offset", type=float, help="Segment start time in seconds")
     parser.add_argument("--duration", type=float, help="Segment duration in seconds")
     parser.add_argument("--individual", help="Individual ID (e.g., R3277)")
+    parser.add_argument("--subfolder", help="Subfolder name under clip dir (e.g., R3277, vocal, R3277_vocal)")
     parser.add_argument("--voc-index", type=int, default=0,
                         help="Vocalization index within filtered list")
     parser.add_argument("--callmark-meta", help="JSON string with CallMark metadata for this segment")
@@ -165,8 +169,10 @@ def main():
         mode_parse_callmark(args)
 
     elif args.mode == "segment-spectrogram":
-        if not args.wav or not args.output_dir or not args.individual:
-            parser.error("--wav, --output-dir, and --individual are required for segment-spectrogram mode")
+        if not args.wav or not args.output_dir:
+            parser.error("--wav and --output-dir are required for segment-spectrogram mode")
+        if not args.subfolder and not args.individual:
+            parser.error("--subfolder or --individual is required for segment-spectrogram mode")
         mode_segment_spectrogram(args)
 
 

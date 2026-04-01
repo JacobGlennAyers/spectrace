@@ -140,20 +140,34 @@ def get_unique_individuals(vocalizations: List[Dict]) -> List[str]:
     return individuals
 
 
-def filter_vocalizations(vocalizations: List[Dict], individual: str = "All") -> List[Dict]:
+def get_unique_clusternames(vocalizations: List[Dict]) -> List[str]:
+    """Return sorted list of unique cluster names from vocalizations."""
+    clusternames = sorted(set(v["clustername"] for v in vocalizations if v["clustername"]))
+    return clusternames
+
+
+def filter_vocalizations(
+    vocalizations: List[Dict],
+    individual: str = "All",
+    clustername: str = "All",
+) -> List[Dict]:
     """
-    Filter vocalization list by individual.
+    Filter vocalization list by individual and/or cluster name.
 
     Args:
         vocalizations: List of vocalization dicts from parse_callmark_excel().
         individual:    Individual ID to filter by, or "All" for no filtering.
+        clustername:   Cluster name to filter by, or "All" for no filtering.
 
     Returns:
         Filtered list sorted by onset_sec.
     """
-    if individual == "All":
-        return list(vocalizations)
-    return [v for v in vocalizations if v["individual"] == individual]
+    result = list(vocalizations)
+    if individual != "All":
+        result = [v for v in result if v["individual"] == individual]
+    if clustername != "All":
+        result = [v for v in result if v["clustername"] == clustername]
+    return result
 
 
 def add_padding(

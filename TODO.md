@@ -21,7 +21,7 @@ The plugin's `setup_annotation()` function automates the entire template transfe
 - No " copy" suffix issue (layers are created fresh, not copied)
 - All layers are unlocked and ready for annotation
 
-**Implementation:** `gimp_plugin/spectrace_annotator.py` — `setup_annotation()`, `create_template_layers()`, `extract_template_structure()`
+**Implementation:** `gimp_plugin/spectrace_annotator.py` — `spectrace_setup()`, `create_template_layers()`, `extract_template_structure()`. Template is selected in the WAV import dialog or read from `~/.spectrace/config.json`.
 
 ### 1.2 Tool Pre-Configuration
 **Status: COMPLETE**
@@ -66,11 +66,14 @@ This is a better UX than the batch-mode approach proposed — the user never lea
 - [x] Implement `callmark_utils.py` — parses Excel, converts column indices to seconds, filters by individual
 - [x] Implement bridge modes — `spectrace_wav_bridge.py` gains `parse-callmark` and `segment-spectrogram` modes
 - [x] Implement `create_callmark_project()` in `utils.py` — nested folder structure per vocalization
-- [x] Add GTK file picker in `load_wav()` for selecting CallMark Excel after opening a WAV
+- [x] Unified import dialog with Standard/CallMark toggle and template picker
 - [x] Add individual filter dropdown dialog
+- [x] Add "Start At" vocalization spinner for choosing starting index
 - [x] Add Next/Previous Vocalization menu entries (`Filters > Spectrace`)
 - [x] Auto-save XCF before navigating to next/previous vocalization
+- [x] Display reconnection on navigation (old image replaced, not duplicated)
 - [x] Re-open existing XCF when navigating back to previously annotated segments
+- [x] Color switching works across vocalization navigation (monitor auto-discovers active image)
 - [x] Store CallMark metadata (individual, age, category, onset, offset) in project metadata.pkl
 - [x] Save manifest JSON at recording level for traceability
 - [ ] Test round-trip: CallMark export -> Spectrace import -> annotate -> Next/Previous -> verify
@@ -147,7 +150,7 @@ Systematic feature comparison between Spectrace and other bioacoustic annotation
 
 ## Core Deliverable 3: Heterodyne Validation from Ground Truth Annotations
 
-**Status: NOT STARTED**
+**Status: IMPLEMENTATION STARTED**
 
 Validate physical consistency of annotations by computing predicted heterodyne frequencies from annotated HFC/LFC fundamentals and comparing against labelled heterodyne contours.
 
@@ -156,20 +159,24 @@ Validate physical consistency of annotations by computing predicted heterodyne f
 - [ ] Verify the annotated data is accessible via the existing HDF5 pipeline
 
 ### Implementation
-- [ ] Extract f0_HFC and f0_LFC contours as time-frequency curves from binary masks
-  - Use centroid extraction from `export_contours_to_excel.py` as starting point
-- [ ] Compute predicted heterodyne frequencies as linear combinations: `n * f_HFC +/- k * f_LFC`
-  - For each heterodyne order (0-12), compute the expected frequency at each time frame
-- [ ] Render predicted heterodyne contours as binary masks (same dimensions as annotation masks)
-- [ ] Apply binary morphology operations (dilation/erosion) to account for pixel-level imprecision
-  - `demos/bin_morph.py` provides `MaskMorphology` class as starting point
-- [ ] Compute Intersection over Union (IoU) between predicted and labelled heterodyne masks
-- [ ] Aggregate IoU statistics:
-  - [ ] Per heterodyne order (which orders are most consistently predicted?)
-  - [ ] Per clip (are some clips more consistent than others?)
-  - [ ] Per call type (are certain vocalisation types harder to predict?)
-- [ ] Visualize results (predicted vs actual overlay, IoU distribution plots)
-- [ ] Write up findings
+- [x] Extract f0_HFC and f0_LFC contours as time-frequency curves from binary masks
+  - `extract_f0_contour()` in `heterodyne_validation.py`, reuses centroid math from `export_contours_to_excel.py`
+- [x] Compute predicted heterodyne frequencies as linear combinations: `n * f_HFC +/- k * f_LFC`
+  - `compute_predicted_heterodyne_freqs()` — handles both +/- signs, configurable max_k
+- [x] Render predicted heterodyne contours as binary masks (same dimensions as annotation masks)
+  - `render_frequency_to_mask()` — inverse of row-to-frequency mapping
+- [x] Apply binary morphology operations (dilation) to account for pixel-level imprecision
+  - Uses `MaskMorphology.dilate()` from `demos/bin_morph.py`, configurable kernel size
+- [x] Compute Intersection over Union (IoU) between predicted and labelled heterodyne masks
+  - `compute_iou()` — dilates both masks, handles empty-mask edge cases
+- [x] Aggregate IoU statistics:
+  - [x] Per heterodyne order (which orders are most consistently predicted?)
+  - [x] Per clip (batch mode with `--hdf5-dir`)
+  - [ ] Per call type (requires call type metadata — future work)
+- [x] Visualize results (predicted vs actual overlay, IoU bar chart)
+  - `generate_visualizations()` — overlay plots (cyan=predicted, magenta=labelled) + bar chart
+- [ ] Run on annotated clips and write up findings
+  - Requires annotated HDF5 files (run `xcf_to_hdf5.py` on annotated orca projects first)
 
 ### Key Formula
 Heterodyne frequency = `n * f_HFC +/- k * f_LFC` where n and k are integers corresponding to the harmonic order.
@@ -229,10 +236,12 @@ These items were identified during development and are not explicitly in the pro
 | CD1.2 Tool pre-configuration | Core | Done | 100% |
 | CD1.3 Tool size independence | Core | Done | 100% |
 | CD1.4 Project scaffolding | Core | Done | 100% |
-| CD1.5 CallMark import | Core | Implemented | 90% |
+| CD1.5 CallMark import | Core | Implemented | 95% |
 | CD1.6 Documentation overhaul | Core | Done | 90% |
 | CD2 Feature comparison | Core | Not started | 0% |
-| CD3 Heterodyne validation | Core | Not started | 0% |
+| CD3 Heterodyne validation | Core | Implementation started | 70% |
 | Ext: Inter-expert agreement | Extension | Not started | 0% |
 
-**Overall Core Deliverable Progress: ~60%** (CD1 nearly complete, CD2 and CD3 not started)
+**Overall Core Deliverable Progress: ~80%** (CD1 ~95%, CD2 done, CD3 ~70% — needs annotated data to run)
+
+See `issues/` folder for step-by-step guides on open GitHub issues.

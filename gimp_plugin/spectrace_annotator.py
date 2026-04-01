@@ -519,20 +519,33 @@ class SpectraceBackgroundMonitor(object):
         # Poll every 200ms
         self._timer_id = gobject.timeout_add(200, self._poll)
 
+    _poll_count = 0
+
     def _poll(self):
         """Check active layer and enforce tool settings every cycle."""
+        self._poll_count += 1
+        if self._poll_count <= 3 or self._poll_count % 100 == 0:
+            _log("Monitor._poll #%d" % self._poll_count)
         try:
             self._enforce_settings()
 
             # --- Layer change detection ---
-            gimp_active = self.image.active_layer
-            if gimp_active is not None:
-                gimp_lname = self._resolve_layer_path(gimp_active)
-            else:
-                gimp_lname = None
-
-            if gimp_lname is not None and gimp_lname != self.current_layer_name:
-                self._switch_to_layer(gimp_lname)
+            # Check ALL open images for an active annotation layer.
+            # This lets one monitor follow the user across images
+            # (e.g. CallMark Next/Previous navigation).
+            for img in gimp.image_list():
+                try:
+                    active = img.active_layer
+                except Exception:
+                    continue
+                if active is None:
+                    continue
+                lname = self._resolve_layer_path(active)
+                if lname in self.layer_map:
+                    if lname != self.current_layer_name:
+                        self.image = img
+                        self._switch_to_layer(lname)
+                    break
         except Exception:
             pass
 
@@ -627,6 +640,12 @@ class SpectraceBackgroundMonitor(object):
 # CALLMARK SESSION STATE
 # ============================================================
 
+# Mutable state — avoids Python 2.7 `global` rebinding issues.
+_STATE = {
+    "template_xcf": "",     # template chosen in import dialog
+    "gtk_window": None,     # hidden window that keeps gtk.main() alive
+}
+
 _CALLMARK_SESSION = {
     "active": False,
     "wav_path": "",
@@ -634,12 +653,14 @@ _CALLMARK_SESSION = {
     "vocalizations": [],
     "current_index": 0,
     "individual_filter": "All",
+    "clustername_filter": "All",
     "project_folders": {},
     "nfft": 2048,
     "grayscale": True,
     "current_image": None,
     "spectrace_root": "",
     "project_dir": "",
+    "template_xcf": "",
 }
 
 _CALLMARK_SESSION_FILE = os.path.join(
@@ -658,11 +679,13 @@ def _save_callmark_session():
         "vocalizations": session["vocalizations"],
         "current_index": session["current_index"],
         "individual_filter": session["individual_filter"],
+        "clustername_filter": session.get("clustername_filter", "All"),
         "project_folders": {str(k): v for k, v in session["project_folders"].items()},
         "nfft": session["nfft"],
         "grayscale": session["grayscale"],
         "spectrace_root": session["spectrace_root"],
         "project_dir": session["project_dir"],
+        "template_xcf": session.get("template_xcf", ""),
     }
     try:
         session_dir = os.path.dirname(_CALLMARK_SESSION_FILE)
@@ -689,6 +712,7 @@ def _load_callmark_session():
         _CALLMARK_SESSION["vocalizations"] = data.get("vocalizations", [])
         _CALLMARK_SESSION["current_index"] = data.get("current_index", 0)
         _CALLMARK_SESSION["individual_filter"] = data.get("individual_filter", "All")
+        _CALLMARK_SESSION["clustername_filter"] = data.get("clustername_filter", "All")
         _CALLMARK_SESSION["project_folders"] = {
             int(k): v for k, v in data.get("project_folders", {}).items()
         }
@@ -696,6 +720,7 @@ def _load_callmark_session():
         _CALLMARK_SESSION["grayscale"] = data.get("grayscale", True)
         _CALLMARK_SESSION["spectrace_root"] = data.get("spectrace_root", "")
         _CALLMARK_SESSION["project_dir"] = data.get("project_dir", "")
+        _CALLMARK_SESSION["template_xcf"] = data.get("template_xcf", "")
         _CALLMARK_SESSION["current_image"] = None  # Can't persist GIMP objects
         _log("CallMark session restored: active=%s, index=%d/%d" % (
             _CALLMARK_SESSION["active"],
@@ -767,84 +792,353 @@ def _run_bridge(spectrace_root, python3, args_list):
         return None
 
 
-def _show_callmark_picker():
-    """
-    Show a GTK file chooser asking the user to optionally select a CallMark
-    Excel export file. Returns the file path string, or None if cancelled.
-    """
-    dialog = gtk.FileChooserDialog(
-        "Select CallMark Export (Cancel to skip)",
-        None,
-        gtk.FILE_CHOOSER_ACTION_OPEN,
-        (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-         gtk.STOCK_OK, gtk.RESPONSE_OK),
-    )
+def _find_gimp_window():
+    """Find GIMP's image window from GTK toplevels for dialog parenting."""
+    try:
+        for w in gtk.window_list_toplevels():
+            title = w.get_title()
+            if title and w.get_visible():
+                if "GIMP" in title or "GNU Image" in title:
+                    return w
+        # Fallback: any visible toplevel
+        for w in gtk.window_list_toplevels():
+            if w.get_visible() and w.get_title():
+                return w
+    except Exception:
+        pass
+    return None
 
-    # Add filter for Excel files
-    filt = gtk.FileFilter()
-    filt.set_name("Excel files (*.xlsx)")
-    filt.add_pattern("*.xlsx")
-    filt.add_pattern("*.XLSX")
-    dialog.add_filter(filt)
 
-    filt_all = gtk.FileFilter()
-    filt_all.set_name("All files")
-    filt_all.add_pattern("*")
-    dialog.add_filter(filt_all)
-
-    response = dialog.run()
-    filepath = None
-    if response == gtk.RESPONSE_OK:
-        filepath = dialog.get_filename()
-    dialog.destroy()
-
-    # Process pending GTK events so dialog fully closes
+def _raise_dialog(dialog):
+    """Bring a dialog to the front, with macOS-specific workaround."""
+    # Pump GTK events so the window is realized
     while gtk.events_pending():
         gtk.main_iteration()
 
-    return filepath
+    dialog.present()
+
+    while gtk.events_pending():
+        gtk.main_iteration()
+
+    if sys.platform == "darwin":
+        try:
+            import ctypes
+            import ctypes.util
+            objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('objc'))
+            objc.objc_msgSend.restype = ctypes.c_void_p
+            objc.objc_msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            objc.sel_registerName.restype = ctypes.c_void_p
+            objc.sel_registerName.argtypes = [ctypes.c_char_p]
+            objc.objc_getClass.restype = ctypes.c_void_p
+            objc.objc_getClass.argtypes = [ctypes.c_char_p]
+            NSApp_class = objc.objc_getClass(b'NSApplication')
+            sel_sharedApp = objc.sel_registerName(b'sharedApplication')
+            nsapp = objc.objc_msgSend(NSApp_class, sel_sharedApp)
+            sel_activate = objc.sel_registerName(b'activateIgnoringOtherApps:')
+            objc.objc_msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            objc.objc_msgSend(nsapp, sel_activate, True)
+            objc.objc_msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        except Exception as e:
+            _log("_raise_dialog macOS fallback error: %s" % str(e))
 
 
-def _show_individual_filter(individuals):
+def _show_import_dialog():
     """
-    Show a GTK dialog with a dropdown to filter by individual.
-    Returns the selected individual string or "All".
+    Unified import dialog.  Always shows the annotation template picker.
+    A checkbox toggles the CallMark-specific options (Excel file, individual
+    filter).
+
     Returns None if cancelled.
+    Returns a dict with keys:
+        mode            - "standard" or "callmark"
+        template_xcf    - path or "" for default orca
+        # CallMark only:
+        excel_path, individual, callmark_data
     """
-    dialog = gtk.Dialog(
-        "Filter by Individual",
-        None,
-        gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-        (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-         gtk.STOCK_OK, gtk.RESPONSE_OK),
-    )
+    parent = _find_gimp_window()
+    try:
+        import gimpui
+        dialog = gimpui.Dialog(
+            "spectrace-import", "python-fu",
+            None, 0, None, "spectrace-import",
+            gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK,
+        )
+        dialog.set_transient()
+    except Exception:
+        dialog = gtk.Dialog(
+            "Spectrace - Import",
+            parent,
+            gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+             gtk.STOCK_OK, gtk.RESPONSE_OK),
+        )
 
-    label = gtk.Label("Select individual (or 'All'):")
-    dialog.vbox.pack_start(label, False, False, 8)
+    dialog.set_default_size(500, -1)
+    dialog.set_position(gtk.WIN_POS_CENTER)
 
-    combo = gtk.combo_box_new_text()
-    combo.append_text("All")
-    for ind in individuals:
-        combo.append_text(str(ind))
-    combo.set_active(0)
-    dialog.vbox.pack_start(combo, False, False, 8)
+    vbox = dialog.vbox
+    vbox.set_spacing(6)
 
-    # Show count info
-    count_label = gtk.Label("%d individuals available" % len(individuals))
-    dialog.vbox.pack_start(count_label, False, False, 4)
+    # --- Section: Annotation Template (always visible) ---
+    frame_tpl = gtk.Frame(" Annotation Template ")
+    frame_tpl.set_border_width(8)
+    hbox_tpl = gtk.HBox(spacing=8)
+    hbox_tpl.set_border_width(6)
 
+    tpl_label = gtk.Label("Template:")
+    hbox_tpl.pack_start(tpl_label, False, False, 0)
+
+    tpl_entry = gtk.Entry()
+    tpl_entry.set_editable(False)
+    tpl_entry.set_text("(default orca template)")
+    hbox_tpl.pack_start(tpl_entry, True, True, 0)
+
+    tpl_btn = gtk.Button("Browse...")
+    hbox_tpl.pack_start(tpl_btn, False, False, 0)
+
+    frame_tpl.add(hbox_tpl)
+    vbox.pack_start(frame_tpl, False, False, 0)
+
+    # --- CallMark toggle ---
+    callmark_check = gtk.CheckButton("CallMark import")
+    callmark_check.set_border_width(8)
+    vbox.pack_start(callmark_check, False, False, 0)
+
+    # --- CallMark options (hidden by default) ---
+    callmark_box = gtk.VBox(spacing=6)
+
+    # Excel file
+    frame_cm = gtk.Frame(" CallMark Export ")
+    frame_cm.set_border_width(8)
+    hbox_cm = gtk.HBox(spacing=8)
+    hbox_cm.set_border_width(6)
+
+    excel_label = gtk.Label("Excel file:")
+    hbox_cm.pack_start(excel_label, False, False, 0)
+
+    excel_entry = gtk.Entry()
+    excel_entry.set_editable(False)
+    excel_entry.set_text("(none selected)")
+    hbox_cm.pack_start(excel_entry, True, True, 0)
+
+    excel_btn = gtk.Button("Browse...")
+    hbox_cm.pack_start(excel_btn, False, False, 0)
+
+    frame_cm.add(hbox_cm)
+    callmark_box.pack_start(frame_cm, False, False, 0)
+
+    # Filters (individual + clustername)
+    frame_filt = gtk.Frame(" Filters ")
+    frame_filt.set_border_width(8)
+    filt_vbox = gtk.VBox(spacing=4)
+    filt_vbox.set_border_width(6)
+
+    # Individual filter row
+    hbox_ind = gtk.HBox(spacing=8)
+    ind_label = gtk.Label("Individual:")
+    hbox_ind.pack_start(ind_label, False, False, 0)
+    ind_combo = gtk.combo_box_new_text()
+    ind_combo.append_text("All")
+    ind_combo.set_active(0)
+    hbox_ind.pack_start(ind_combo, True, True, 0)
+    filt_vbox.pack_start(hbox_ind, False, False, 0)
+
+    # Cluster name filter row
+    hbox_cl = gtk.HBox(spacing=8)
+    cl_label = gtk.Label("Cluster:")
+    hbox_cl.pack_start(cl_label, False, False, 0)
+    cl_combo = gtk.combo_box_new_text()
+    cl_combo.append_text("All")
+    cl_combo.set_active(0)
+    hbox_cl.pack_start(cl_combo, True, True, 0)
+    filt_vbox.pack_start(hbox_cl, False, False, 0)
+
+    info_label = gtk.Label("")
+    filt_vbox.pack_start(info_label, False, False, 0)
+
+    frame_filt.add(filt_vbox)
+    callmark_box.pack_start(frame_filt, False, False, 0)
+
+    # Start vocalization
+    frame_start = gtk.Frame(" Start At ")
+    frame_start.set_border_width(8)
+    hbox_start = gtk.HBox(spacing=8)
+    hbox_start.set_border_width(6)
+
+    start_label = gtk.Label("Vocalization:")
+    hbox_start.pack_start(start_label, False, False, 0)
+
+    start_adj = gtk.Adjustment(value=1, lower=1, upper=1, step_incr=1)
+    start_spin = gtk.SpinButton(start_adj, climb_rate=1, digits=0)
+    start_spin.set_numeric(True)
+    hbox_start.pack_start(start_spin, False, False, 0)
+
+    start_total_label = gtk.Label("/ ?")
+    hbox_start.pack_start(start_total_label, False, False, 0)
+
+    frame_start.add(hbox_start)
+    callmark_box.pack_start(frame_start, False, False, 0)
+
+    vbox.pack_start(callmark_box, False, False, 0)
+
+    # Toggle visibility of CallMark options
+    def on_callmark_toggled(widget):
+        if widget.get_active():
+            callmark_box.show_all()
+        else:
+            callmark_box.hide()
+        dialog.resize(1, 1)  # shrink to fit
+
+    callmark_check.connect("toggled", on_callmark_toggled)
+
+    # --- State for callbacks ---
+    state = {"excel_path": None, "template_xcf": "", "individuals": [], "clusternames": []}
+
+    def on_excel_browse(widget):
+        fc = gtk.FileChooserDialog(
+            "Select CallMark Excel",
+            dialog,
+            gtk.FILE_CHOOSER_ACTION_OPEN,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+             gtk.STOCK_OK, gtk.RESPONSE_OK),
+        )
+        filt = gtk.FileFilter()
+        filt.set_name("Excel files (*.xlsx)")
+        filt.add_pattern("*.xlsx")
+        filt.add_pattern("*.XLSX")
+        fc.add_filter(filt)
+        filt_all = gtk.FileFilter()
+        filt_all.set_name("All files")
+        filt_all.add_pattern("*")
+        fc.add_filter(filt_all)
+
+        _raise_dialog(fc)
+        if fc.run() == gtk.RESPONSE_OK:
+            path = fc.get_filename()
+            state["excel_path"] = path
+            excel_entry.set_text(os.path.basename(path))
+
+            _log("CallMark dialog: parsing %s" % path)
+            spectrace_root = find_spectrace_root()
+            python3 = find_python3()
+            result = _run_bridge(
+                spectrace_root, python3,
+                ["--mode", "parse-callmark", "--callmark-excel", path]
+            )
+            if result:
+                individuals = result.get("individuals", [])
+                clusternames = result.get("clusternames", [])
+                total = result.get("total_count", 0)
+                state["individuals"] = individuals
+                state["clusternames"] = clusternames
+                state["callmark_data"] = result
+                # Populate individual combo
+                model = ind_combo.get_model()
+                model.clear()
+                ind_combo.append_text("All")
+                for ind in individuals:
+                    ind_combo.append_text(str(ind))
+                ind_combo.set_active(0)
+                # Populate cluster combo
+                cl_model = cl_combo.get_model()
+                cl_model.clear()
+                cl_combo.append_text("All")
+                for cn in clusternames:
+                    cl_combo.append_text(str(cn))
+                cl_combo.set_active(0)
+                info_label.set_text("%d vocalizations" % total)
+                state["all_vocalizations"] = result.get("vocalizations", [])
+                start_adj.set_upper(total)
+                start_total_label.set_text("/ %d" % total)
+            else:
+                info_label.set_text("(parse error)")
+        fc.destroy()
+
+    def on_tpl_browse(widget):
+        fc = gtk.FileChooserDialog(
+            "Select Template XCF",
+            dialog,
+            gtk.FILE_CHOOSER_ACTION_OPEN,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+             gtk.STOCK_OK, gtk.RESPONSE_OK),
+        )
+        filt = gtk.FileFilter()
+        filt.set_name("GIMP XCF files (*.xcf)")
+        filt.add_pattern("*.xcf")
+        filt.add_pattern("*.XCF")
+        fc.add_filter(filt)
+        filt_all = gtk.FileFilter()
+        filt_all.set_name("All files")
+        filt_all.add_pattern("*")
+        fc.add_filter(filt_all)
+
+        _raise_dialog(fc)
+        if fc.run() == gtk.RESPONSE_OK:
+            path = fc.get_filename()
+            state["template_xcf"] = path or ""
+            tpl_entry.set_text(os.path.basename(path) if path else "(default orca)")
+        fc.destroy()
+
+    def _update_filter_count():
+        """Recompute vocalization count based on both filter combos."""
+        all_vocs = state.get("all_vocalizations", [])
+        if not all_vocs:
+            return
+        ind_sel = ind_combo.get_active_text() or "All"
+        cl_sel = cl_combo.get_active_text() or "All"
+        filtered = all_vocs
+        if ind_sel != "All":
+            filtered = [v for v in filtered if v.get("individual") == ind_sel]
+        if cl_sel != "All":
+            filtered = [v for v in filtered if v.get("clustername") == cl_sel]
+        count = len(filtered)
+        start_adj.set_upper(max(count, 1))
+        start_adj.set_value(1)
+        start_total_label.set_text("/ %d" % count)
+
+    def on_individual_changed(widget):
+        _update_filter_count()
+
+    def on_clustername_changed(widget):
+        _update_filter_count()
+
+    ind_combo.connect("changed", on_individual_changed)
+    cl_combo.connect("changed", on_clustername_changed)
+    excel_btn.connect("clicked", on_excel_browse)
+    tpl_btn.connect("clicked", on_tpl_browse)
+
+    # Show everything except CallMark options
     dialog.show_all()
+    callmark_box.hide()
+    _raise_dialog(dialog)
+
     response = dialog.run()
 
-    selected = None
+    result = None
     if response == gtk.RESPONSE_OK:
-        selected = combo.get_active_text()
+        is_callmark = callmark_check.get_active()
+        if is_callmark and state["excel_path"]:
+            result = {
+                "mode": "callmark",
+                "template_xcf": state.get("template_xcf", ""),
+                "excel_path": state["excel_path"],
+                "individual": ind_combo.get_active_text() or "All",
+                "clustername": cl_combo.get_active_text() or "All",
+                "callmark_data": state.get("callmark_data"),
+                "start_index": int(start_spin.get_value()) - 1,  # 0-based
+            }
+        else:
+            result = {
+                "mode": "standard",
+                "template_xcf": state.get("template_xcf", ""),
+            }
     dialog.destroy()
 
     while gtk.events_pending():
         gtk.main_iteration()
 
-    return selected
+    return result
 
 
 def _load_png_into_gimp(png_path):
@@ -864,34 +1158,37 @@ def _load_png_into_gimp(png_path):
     return img
 
 
-def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_data):
+def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_result):
     """
     Handle WAV loading in CallMark mode.
-    Shows individual filter, stores session state, generates first segment.
+    Takes the combined result from _show_callmark_picker().
+    Stores session state, generates first segment.
     Returns a GIMP image.
     """
     global _CALLMARK_SESSION
 
+    callmark_data = callmark_result["callmark_data"]
     vocalizations = callmark_data["vocalizations"]
     individuals = callmark_data["individuals"]
+    selected_individual = callmark_result["individual"]
+    selected_cluster = callmark_result.get("clustername", "All")
+    template_xcf = callmark_result.get("template_xcf", "")
 
-    # Show individual filter
-    selected = _show_individual_filter(individuals)
-    if selected is None:
-        _log("CallMark: individual filter cancelled, falling back to normal mode")
-        return None  # Fall through to normal mode
-
-    # Filter vocalizations
-    if selected != "All":
-        filtered = [v for v in vocalizations if v.get("individual") == selected]
-    else:
-        filtered = list(vocalizations)
+    # Filter vocalizations by individual and/or cluster
+    filtered = list(vocalizations)
+    if selected_individual != "All":
+        filtered = [v for v in filtered if v.get("individual") == selected_individual]
+    if selected_cluster != "All":
+        filtered = [v for v in filtered if v.get("clustername") == selected_cluster]
 
     if not filtered:
-        gimp.message("Spectrace: No vocalizations found for individual '%s'." % selected)
+        gimp.message("Spectrace: No vocalizations found for filters: individual='%s', cluster='%s'."
+                     % (selected_individual, selected_cluster))
         return None
 
-    _log("CallMark: %d vocalizations for '%s'" % (len(filtered), selected))
+    _log("CallMark: %d vocalizations for individual='%s', cluster='%s'"
+         % (len(filtered), selected_individual, selected_cluster))
+    _log("CallMark: template XCF = '%s'" % (template_xcf or "(default orca)"))
 
     config = load_config()
     spectrace_root = find_spectrace_root()
@@ -900,15 +1197,18 @@ def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_data)
     # Store session state
     _CALLMARK_SESSION["active"] = True
     _CALLMARK_SESSION["wav_path"] = filename
-    _CALLMARK_SESSION["excel_path"] = callmark_data.get("excel_path", "")
+    _CALLMARK_SESSION["excel_path"] = callmark_result.get("excel_path", "")
     _CALLMARK_SESSION["vocalizations"] = filtered
-    _CALLMARK_SESSION["current_index"] = 0
-    _CALLMARK_SESSION["individual_filter"] = selected
+    start_index = callmark_result.get("start_index", 0)
+    _CALLMARK_SESSION["current_index"] = start_index
+    _CALLMARK_SESSION["individual_filter"] = selected_individual
+    _CALLMARK_SESSION["clustername_filter"] = selected_cluster
     _CALLMARK_SESSION["project_folders"] = {}
     _CALLMARK_SESSION["nfft"] = config.get("default_nfft", 2048)
     _CALLMARK_SESSION["grayscale"] = config.get("default_grayscale", True)
     _CALLMARK_SESSION["spectrace_root"] = spectrace_root
     _CALLMARK_SESSION["project_dir"] = project_dir
+    _CALLMARK_SESSION["template_xcf"] = template_xcf
 
     # Save manifest at recording level
     recording_dir = os.path.join(project_dir, clip_basename)
@@ -916,9 +1216,10 @@ def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_data)
         os.makedirs(recording_dir)
     manifest_path = os.path.join(recording_dir, "callmark_manifest.json")
     manifest = {
-        "callmark_excel": callmark_data.get("excel_path", ""),
+        "callmark_excel": callmark_result.get("excel_path", ""),
         "wav_file": filename,
-        "individual_filter": selected,
+        "individual_filter": selected_individual,
+        "clustername_filter": selected_cluster,
         "total_vocalizations": len(filtered),
         "individuals": individuals,
     }
@@ -929,15 +1230,15 @@ def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_data)
     except Exception as e:
         _log("Manifest save error: %s" % str(e))
 
-    # Generate first segment
-    result = _generate_callmark_segment(0)
+    # Generate starting segment
+    result = _generate_callmark_segment(start_index)
     if result is None:
-        gimp.message("Spectrace: Failed to generate first vocalization spectrogram.")
+        gimp.message("Spectrace: Failed to generate vocalization %d spectrogram." % (start_index + 1))
         _CALLMARK_SESSION["active"] = False
         return None
 
     png_path = result["spectrogram_path"]
-    _CALLMARK_SESSION["project_folders"][0] = result["project_folder"]
+    _CALLMARK_SESSION["project_folders"][start_index] = result["project_folder"]
 
     # Load into GIMP
     img = _load_png_into_gimp(png_path)
@@ -947,15 +1248,36 @@ def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_data)
     _save_callmark_session()
 
     # Show status
-    voc = filtered[0]
-    gimp.message("CallMark: Vocalization 1/%d - %s, %s, Age %d dph" % (
-        len(filtered),
+    voc = filtered[start_index]
+    gimp.message("CallMark: Vocalization %d/%d - %s [%s], %s, Age %d dph" % (
+        start_index + 1, len(filtered),
         voc.get("individual", "?"),
+        voc.get("clustername", "?"),
         voc.get("category", "?"),
         voc.get("age", 0),
     ))
 
     return img
+
+
+def _callmark_subfolder(session):
+    """
+    Compute the subfolder name based on active filters.
+    - Individual only:  "R3277"
+    - Cluster only:     "vocal"
+    - Both:             "R3277_vocal"
+    - Neither:          "all"
+    """
+    ind = session.get("individual_filter", "All")
+    cl = session.get("clustername_filter", "All")
+    if ind != "All" and cl != "All":
+        return "%s_%s" % (ind, cl)
+    elif ind != "All":
+        return ind
+    elif cl != "All":
+        return cl
+    else:
+        return "all"
 
 
 def _generate_callmark_segment(index):
@@ -967,12 +1289,14 @@ def _generate_callmark_segment(index):
     voc = session["vocalizations"][index]
     python3 = find_python3()
 
+    subfolder = _callmark_subfolder(session)
+
     args_list = [
         "--mode", "segment-spectrogram",
         "--wav", session["wav_path"],
         "--output-dir", session["project_dir"],
         "--nfft", str(session["nfft"]),
-        "--individual", voc.get("individual", "unknown"),
+        "--subfolder", subfolder,
         "--voc-index", str(index),
         "--callmark-meta", json.dumps(voc),
     ]
@@ -980,6 +1304,27 @@ def _generate_callmark_segment(index):
         args_list.append("--grayscale")
 
     return _run_bridge(session["spectrace_root"], python3, args_list)
+
+
+def _reconnect_display(old_image, new_image):
+    """Repoint all displays from old_image to new_image, then delete old_image.
+
+    Uses gimp.displays_reconnect() which is the only way to manage displays
+    in GIMP 2.10 without tracking display objects (there is no display-list
+    procedure in the PDB).
+    """
+    try:
+        pdb.gimp_image_clean_all(old_image)
+    except Exception:
+        pass
+    try:
+        gimp.displays_reconnect(old_image, new_image)
+        _log("CallMark: reconnected display to new image")
+    except Exception as e:
+        _log("CallMark: displays_reconnect failed: %s" % str(e))
+        pdb.gimp_display_new(new_image)
+    # Old image is auto-deleted by GIMP when its last display is reconnected.
+    pdb.gimp_displays_flush()
 
 
 def _auto_save_xcf(image):
@@ -1002,10 +1347,10 @@ def _auto_save_xcf(image):
         gimp.message("Spectrace: Could not auto-save XCF:\n%s" % str(e))
 
 
-def _load_callmark_segment_into_gimp(index):
+def _load_callmark_segment_into_gimp(index, old_image=None):
     """
     Generate or reload vocalization segment at index.
-    Closes old image, loads new one, runs setup annotation.
+    If old_image is provided, its display is reconnected to the new image.
     """
     global _CALLMARK_SESSION
     session = _CALLMARK_SESSION
@@ -1013,10 +1358,10 @@ def _load_callmark_segment_into_gimp(index):
     # Check for existing XCF (previously annotated)
     voc_name = "v%03d" % index
     voc = session["vocalizations"][index]
-    individual = voc.get("individual", "unknown")
+    subfolder = _callmark_subfolder(session)
     clip_basename = os.path.splitext(os.path.basename(session["wav_path"]))[0]
     voc_dir = os.path.join(
-        session["project_dir"], clip_basename, individual, voc_name
+        session["project_dir"], clip_basename, subfolder, voc_name
     )
     xcf_path = os.path.join(voc_dir, voc_name + ".xcf")
 
@@ -1032,6 +1377,7 @@ def _load_callmark_segment_into_gimp(index):
             _log("CallMark: XCF load failed: %s, regenerating" % str(e))
             img = None
 
+    needs_setup = False
     if img is None:
         # Generate fresh spectrogram
         result = _generate_callmark_segment(index)
@@ -1040,44 +1386,34 @@ def _load_callmark_segment_into_gimp(index):
             return
         session["project_folders"][index] = result["project_folder"]
         img = _load_png_into_gimp(result["spectrogram_path"])
+        needs_setup = True  # Fresh spectrogram needs annotation layers
 
-    # Close old image
-    old_image = session.get("current_image")
+    # Show new image — reuse old display if available
     if old_image is not None:
-        try:
-            for display in gimp.display_list():
-                try:
-                    if pdb.gimp_display_get_window_position(display) is not None:
-                        pass
-                except Exception:
-                    pass
-            # Delete all displays of the old image
-            display_list = list(gimp.display_list())
-            for d in display_list:
-                try:
-                    if d.image.ID == old_image.ID:
-                        pdb.gimp_display_delete(d)
-                except Exception:
-                    pass
-            pdb.gimp_image_delete(old_image)
-        except Exception as e:
-            _log("CallMark: old image cleanup error: %s" % str(e))
-
-    # Show new image
-    pdb.gimp_display_new(img)
-    pdb.gimp_displays_flush()
+        _reconnect_display(old_image, img)
+    else:
+        pdb.gimp_display_new(img)
+        pdb.gimp_displays_flush()
 
     session["current_image"] = img
     session["current_index"] = index
+
+    # Create annotation layers on the new image if needed.
+    # The running monitor's _poll auto-discovers annotation layers
+    # across all open images, so no explicit retarget is needed.
+    if needs_setup:
+        _create_layers_only(img, session.get("template_xcf", ""))
+    _log("CallMark: loaded segment %d" % index)
 
     # Persist updated index
     _save_callmark_session()
 
     # Show status
     total = len(session["vocalizations"])
-    gimp.message("CallMark: Vocalization %d/%d - %s, %s, Age %d dph" % (
+    gimp.message("CallMark: Vocalization %d/%d - %s [%s], %s, Age %d dph" % (
         index + 1, total,
         voc.get("individual", "?"),
+        voc.get("clustername", "?"),
         voc.get("category", "?"),
         voc.get("age", 0),
     ))
@@ -1105,39 +1441,12 @@ def spectrace_next_vocalization(image, drawable):
         gimp.message("Spectrace: Already at last vocalization (%d/%d)." % (current + 1, total))
         return
 
-    # Auto-save current
+    # Auto-save current, then load next (display gets reconnected)
     _auto_save_xcf(image)
 
-    # Load next
-    _load_callmark_segment_into_gimp(current + 1)
+    # Load next — pass old image so its display can be reused
+    _load_callmark_segment_into_gimp(current + 1, old_image=image)
 
-
-def spectrace_prev_vocalization(image, drawable):
-    """Navigate to the previous vocalization in the CallMark session."""
-    global _CALLMARK_SESSION
-    session = _CALLMARK_SESSION
-
-    # Restore session from disk if not active in memory
-    if not session["active"]:
-        _load_callmark_session()
-        session = _CALLMARK_SESSION
-
-    if not session["active"]:
-        gimp.message("Spectrace: No active CallMark session.\n\n"
-                     "Open a WAV file and select a CallMark Excel export first.")
-        return
-
-    current = session["current_index"]
-
-    if current <= 0:
-        gimp.message("Spectrace: Already at first vocalization (1/%d)." % len(session["vocalizations"]))
-        return
-
-    # Auto-save current
-    _auto_save_xcf(image)
-
-    # Load previous
-    _load_callmark_segment_into_gimp(current - 1)
 
 
 # ============================================================
@@ -1209,26 +1518,25 @@ def load_wav(filename, raw_filename):
     # Derive clip basename from the WAV filename
     clip_basename = os.path.splitext(os.path.basename(filename))[0]
 
-    # === CallMark import: show file picker before generating spectrogram ===
-    callmark_xlsx = _show_callmark_picker()
-    if callmark_xlsx is not None:
-        _log("CallMark Excel selected: %s" % callmark_xlsx)
-        python3 = find_python3()
-        callmark_data = _run_bridge(
-            spectrace_root, python3,
-            ["--mode", "parse-callmark", "--callmark-excel", callmark_xlsx]
-        )
-        if callmark_data is not None:
-            callmark_data["excel_path"] = callmark_xlsx
-            img = _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_data)
-            if img is not None:
-                return img
-            _log("CallMark mode returned None, falling back to normal mode")
-        else:
-            _log("CallMark parse failed, falling back to normal mode")
-            gimp.message("Spectrace: Could not parse CallMark file.\nFalling back to normal mode.")
+    # === Show unified import dialog ===
+    import_result = _show_import_dialog()
+    if import_result is None:
+        _log("Import dialog cancelled")
+        raise RuntimeError("Import cancelled by user")
+
+    # Store selected template globally so Setup Annotation can use it
+    _STATE["template_xcf"] = import_result.get("template_xcf", "")
+
+    if import_result["mode"] == "callmark":
+        _log("CallMark: Excel=%s, individual=%s, cluster=%s" % (
+            import_result["excel_path"], import_result["individual"],
+            import_result.get("clustername", "All")))
+        img = _load_wav_callmark_mode(filename, clip_basename, project_dir, import_result)
+        if img is not None:
+            return img
+        _log("CallMark mode returned None, falling back to normal mode")
     else:
-        _log("No CallMark file selected, using normal mode")
+        _log("Standard import selected")
 
     # Check for existing spectrogram first
     png_path = _find_existing_spectrogram(project_dir, clip_basename)
@@ -1351,6 +1659,35 @@ def load_wav(filename, raw_filename):
     return img
 
 
+def _create_layers_only(image, template_xcf=""):
+    """
+    Create annotation layers on an image WITHOUT starting the background monitor.
+    Used by the CallMark flow in load_wav() where gtk.main() is not running.
+    """
+    _log("=== _create_layers_only (template=%s) ===" % (template_xcf or "(default)"))
+
+    use_root = ROOT_GROUP_NAME
+    use_structure = LAYER_STRUCTURE
+
+    if template_xcf and os.path.isfile(template_xcf):
+        try:
+            template_img = pdb.gimp_file_load(template_xcf, template_xcf)
+            root_name, dyn_structure, dyn_sections, layer_names = \
+                extract_template_structure(template_img)
+            pdb.gimp_image_delete(template_img)
+            if root_name is not None and dyn_structure:
+                use_root = root_name
+                use_structure = dyn_structure
+                _log("Template loaded: root=%s, %d layers" % (root_name, len(layer_names)))
+        except Exception as e:
+            _log("Template load failed in _create_layers_only: %s" % str(e))
+
+    root_group = find_existing_root_group(image, use_root)
+    if root_group is None:
+        create_template_layers(image, use_root, use_structure)
+        _log("Layers created for CallMark segment")
+
+
 def register_load_handlers():
     """Called during GIMP's query phase to register WAV as a loadable format."""
     gimp.register_load_handler("file-wav-spectrogram-load", "wav,WAV", "")
@@ -1360,19 +1697,20 @@ def register_load_handlers():
 # PLUGIN ENTRY POINTS
 # ============================================================
 
-def spectrace_setup(image, drawable, template_xcf=""):
+def _apply_setup_to_image(image, template_xcf=""):
     """
-    Main entry point: set up annotation layers and start the background monitor.
+    Apply annotation layer setup to an image without starting gtk.main().
 
-    If template_xcf is provided, layers are extracted dynamically from the
-    template XCF file. Otherwise falls back to the built-in orca template.
+    Creates layers from template (or built-in orca default), enforces tool
+    settings, sets initial color, and starts the background monitor.
+
+    This is the shared logic used by both the manual Setup Annotation menu
+    entry and the automatic CallMark navigation flow.
+
+    Returns the SpectraceBackgroundMonitor instance, or None on failure.
     """
-    _log("=== spectrace_setup called (v%s, dynamic template) ===" % PLUGIN_VERSION)
-
-    try:
-        pdb.gimp_progress_init("Setting up Spectrace annotation...", None)
-    except Exception:
-        pass
+    _log("=== _apply_setup_to_image (v%s, template=%s) ===" % (
+        PLUGIN_VERSION, template_xcf or "(default)"))
 
     # Resolve template
     use_root = ROOT_GROUP_NAME
@@ -1399,16 +1737,8 @@ def spectrace_setup(image, drawable, template_xcf=""):
                     root_name, len(layer_names), len(dyn_sections)))
             else:
                 _log("Template had no layer groups, using default orca template")
-                gimp.message(
-                    "Spectrace: No layer groups found in template.\n"
-                    "Using default orca template."
-                )
         except Exception as e:
             _log("Template load failed: %s" % str(e))
-            gimp.message(
-                "Spectrace: Could not load template XCF:\n%s\n\n"
-                "Using default orca template." % str(e)
-            )
     else:
         if template_xcf:
             _log("Template file not found: %s" % template_xcf)
@@ -1417,19 +1747,15 @@ def spectrace_setup(image, drawable, template_xcf=""):
     root_group = find_existing_root_group(image, use_root)
     if root_group is None:
         root_group = create_template_layers(image, use_root, use_structure)
-        gimp.message("Spectrace: Created annotation layer structure.")
     else:
-        gimp.message("Spectrace: Using existing annotation layers.")
+        _log("Using existing annotation layers")
 
     # Build layer index
     layer_map = build_layer_index(image, root_group)
 
     if not layer_map:
-        gimp.message(
-            "Spectrace: No layers found in '%s' group. "
-            "Something went wrong during layer creation." % use_root
-        )
-        return
+        _log("No layers found in '%s' group" % use_root)
+        return None
 
     # Enforce tool settings
     enforce_pencil_settings()
@@ -1446,13 +1772,6 @@ def spectrace_setup(image, drawable, template_xcf=""):
         _log("Setting initial color for %s: %s" % (first_layer_name, str(initial_color)))
         set_foreground_color(*initial_color)
 
-    # Verify color
-    try:
-        current = gimp.get_foreground()
-        _log("Initial fg readback: %s" % str(current))
-    except Exception as e:
-        _log("Initial fg readback failed: %s" % str(e))
-
     # macOS: switch to pencil tool via keystroke
     if sys.platform == "darwin":
         try:
@@ -1463,24 +1782,68 @@ def spectrace_setup(image, drawable, template_xcf=""):
         except Exception as e:
             _log("osascript failed: %s" % str(e))
 
+    # Start background monitor
+    _log("Starting background monitor")
+    try:
+        monitor = SpectraceBackgroundMonitor(image, layer_map, use_colors)
+        return monitor
+    except Exception as e:
+        _log("Monitor creation FAILED: %s" % str(e))
+        import traceback
+        _log(traceback.format_exc())
+        return None
+
+
+def spectrace_setup(image, drawable):
+    """
+    Main entry point: set up annotation layers and start the background monitor.
+
+    Reads template_xcf from ~/.spectrace/config.json ("default_template_xcf")
+    if configured, otherwise uses the built-in orca template.
+    """
+    _log("=== spectrace_setup called ===" )
+
+    try:
+        pdb.gimp_progress_init("Setting up Spectrace annotation...", None)
+    except Exception:
+        pass
+
+    # Use template selected in the import dialog, fall back to config
+    template_xcf = _STATE["template_xcf"]
+    if not template_xcf:
+        config = load_config()
+        template_xcf = config.get("default_template_xcf", "")
+
+    monitor = _apply_setup_to_image(image, template_xcf)
+
     try:
         pdb.gimp_progress_end()
     except Exception:
         pass
 
-    # Start background monitor with dynamic colors
-    _log("Starting background monitor")
-    try:
-        monitor = SpectraceBackgroundMonitor(image, layer_map, use_colors)
-        _log("Monitor created, entering gtk.main()")
-    except Exception as e:
-        _log("Monitor creation FAILED: %s" % str(e))
-        import traceback
-        _log(traceback.format_exc())
+    if monitor is None:
+        gimp.message(
+            "Spectrace: Setup failed. Check the template file and try again."
+        )
         return
 
-    gtk.main()
-    _log("gtk.main() returned, plugin done")
+    # gtk.main() is required to keep the gobject.timeout_add timer
+    # firing.  Only create window + enter gtk.main() once.
+    if _STATE["gtk_window"] is None:
+        _log("Monitor created, entering gtk.main() with hidden window")
+        win = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        win.set_title("Spectrace")
+        win.set_decorated(False)
+        win.set_skip_taskbar_hint(True)
+        win.set_default_size(1, 1)
+        win.move(-1, -1)
+        win.connect("delete-event", lambda w, e: gtk.main_quit() or True)
+        win.show()
+        _STATE["gtk_window"] = win
+        gtk.main()
+        _log("gtk.main() returned, plugin done")
+    else:
+        _log("gtk.main() already running, monitor will use existing loop")
 
 
 def spectrace_reset_tools(image, drawable):
@@ -1514,22 +1877,20 @@ register(
     menu="<Load>",
 )
 
-# --- Setup Annotation (with dynamic template support) ---
+# --- Setup Annotation ---
 register(
     "python-fu-spectrace-setup",
-    "Spectrace: Setup annotation layers from template",
-    "Creates the annotation layer structure on the current image from a "
-    "template XCF file (or the built-in orca template if none selected) "
+    "Spectrace: Setup annotation layers",
+    "Creates the annotation layer structure on the current image "
     "and starts the background color monitor.",
     "Spectrace Contributors",
     "MIT License",
     "2025",
-    "Setup Annotation...",
+    "Setup Annotation",
     "*",
     [
         (PF_IMAGE, "image", "Image", None),
         (PF_DRAWABLE, "drawable", "Drawable", None),
-        (PF_FILE, "template-xcf", "Template XCF file (empty = default orca)", ""),
     ],
     [],
     spectrace_setup,
@@ -1573,26 +1934,6 @@ register(
     ],
     [],
     spectrace_next_vocalization,
-    menu="<Image>/Filters/Spectrace",
-)
-
-# --- Previous Vocalization (CallMark) ---
-register(
-    "python-fu-spectrace-prev-voc",
-    "Spectrace: Previous Vocalization",
-    "Navigate to the previous vocalization segment in the CallMark session. "
-    "Auto-saves the current XCF before going back.",
-    "Spectrace Contributors",
-    "MIT License",
-    "2025",
-    "Previous Vocalization",
-    "*",
-    [
-        (PF_IMAGE, "image", "Image", None),
-        (PF_DRAWABLE, "drawable", "Drawable", None),
-    ],
-    [],
-    spectrace_prev_vocalization,
     menu="<Image>/Filters/Spectrace",
 )
 

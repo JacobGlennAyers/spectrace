@@ -101,7 +101,7 @@ def find_index(folder, clip_basename):
 def create_callmark_project(
     project_root: str,
     clip_path: str,
-    individual: str,
+    subfolder: str,
     voc_index: int,
     callmark_meta: dict,
     nfft: int = 2048,
@@ -110,14 +110,18 @@ def create_callmark_project(
     """
     Create a Spectrace project folder for a single CallMark vocalization segment.
 
-    Uses nested structure: projects/<clip_basename>/<individual>/v<NNN>/
+    Uses nested structure: projects/<clip_basename>/<subfolder>/v<NNN>/
+    The subfolder name depends on the active filters:
+        - Individual only:  "R3277"
+        - Cluster only:     "vocal"
+        - Both:             "R3277_vocal"
     Full WAV is copied to the recording-level folder (once).
     Trimmed segment WAV + spectrogram are generated in the vocalization folder.
 
     Args:
         project_root:   Root project directory (e.g., "projects").
         clip_path:      Path to the full WAV file.
-        individual:     Individual ID (e.g., "R3277").
+        subfolder:      Subfolder name under clip dir (derived from filter selections).
         voc_index:      Zero-based vocalization index within the filtered list.
         callmark_meta:  Dict with onset_sec, offset_sec, duration_sec, and other CallMark fields.
         nfft:           FFT window size for spectrogram generation.
@@ -129,10 +133,10 @@ def create_callmark_project(
     clip_basename = os.path.splitext(os.path.basename(clip_path))[0]
     voc_name = "v%03d" % voc_index
 
-    # Build nested directory: projects/ZF/R3277/v000/
+    # Build nested directory: projects/ZF/<subfolder>/v000/
     recording_dir = os.path.join(project_root, clip_basename)
-    individual_dir = os.path.join(recording_dir, individual)
-    voc_dir = os.path.join(individual_dir, voc_name)
+    subfolder_dir = os.path.join(recording_dir, subfolder)
+    voc_dir = os.path.join(subfolder_dir, voc_name)
     os.makedirs(voc_dir, exist_ok=True)
 
     # Copy full WAV to recording level (once)
@@ -191,7 +195,7 @@ def create_callmark_project(
         "segment_wav_path": segment_wav_path,
         "project_folder": voc_dir,
         "recording_folder": recording_dir,
-        "individual": individual,
+        "subfolder": subfolder,
         "voc_name": voc_name,
         "voc_index": voc_index,
         "spectrogram_shape": S_db.shape,
