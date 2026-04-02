@@ -201,6 +201,9 @@ The plugin automatically:
 
 These GIF demonstrations show the annotation workflow:
 
+**Full workflow demo:**
+![Spectrace annotation workflow demo](docs/images/spectrace-demo.gif)
+
 **Drawing contours:**
 ![clip2](https://github.com/user-attachments/assets/0b40cdfb-3127-425b-9b9e-8ce0af64f9a4)
 
