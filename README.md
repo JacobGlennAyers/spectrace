@@ -17,11 +17,13 @@ This tool is particularly useful for creating training datasets for machine lear
 ## Key Features
 
 - **WAV File Handler**: Open WAV files directly in GIMP — the plugin automatically generates and loads the spectrogram (no command-line steps needed)
+- **CallMark Import**: Import vocalization onset/offset data from CallMark Excel exports, filter by individual and cluster, and navigate through vocalizations one-by-one inside GIMP
 - **One-Click Annotation Setup**: `Filters > Spectrace > Setup Annotation` creates all 26 annotation layers, configures tools, and starts the background monitor
 - **Tool Enforcement**: The plugin continuously enforces correct pencil settings (1px, hardness 100, dynamics off) so annotators cannot accidentally misconfigure the tools
 - **Auto Color Switching**: Each annotation layer gets a unique foreground color automatically — switching layers changes the drawing color
 - **Dynamic Templates**: Use any XCF file as a template, or fall back to the built-in orca template
 - **Locked-Down UI**: The installer strips GIMP down to essentials (pencil + eraser only, minimal keyboard shortcuts) to prevent accidental operations
+- **Heterodyne Validation**: Validate annotated heterodyne contours against predicted frequencies computed from HFC/LFC fundamentals using IoU and contour-level metrics
 - **Multiple Export Formats**: Convert annotations to HDF5 for ML pipelines or Excel for spreadsheet analysis
 - **Batch Visualization**: Generate overlay and individual layer visualizations across all projects
 - **Binary Morphology Tools**: Included utilities for post-processing binary masks
@@ -101,18 +103,17 @@ The installer automatically:
 
 > **Note:** The Linux installer auto-detects both standard (`~/.config/GIMP/2.10`) and Flatpak GIMP installations.
 
-<!-- (PICTURE RECOMMENDED: Terminal screenshot showing successful install script output) -->
-
 ### Step 4: Verify the Installation
 
 1. **Close GIMP completely** if it's open (the plugin only loads at startup)
 2. **Reopen GIMP**
 3. You should see a stripped-down interface: only Pencil and Eraser in the toolbox, only Tool Options and Layers panels
-4. Right-click the canvas and check that `Filters > Spectrace` appears with two entries:
-   - `Setup Annotation...`
+4. Right-click the canvas and check that `Filters > Spectrace` appears with three entries:
+   - `Next Vocalization` (active during CallMark sessions)
    - `Reset Tool Settings`
+   - `Setup Annotation`
 
-![GIMP 2.10 with Spectrace plugin — Filters > Spectrace menu showing Setup Annotation and Reset Tool Settings](docs/images/gimp-spectrace-menu.png)
+![GIMP 2.10 with Spectrace plugin — Filters > Spectrace submenu](docs/images/spectrace-menu-full.png)
 
 If the Spectrace menu does not appear, see [Troubleshooting](#troubleshooting).
 
@@ -120,88 +121,16 @@ If the Spectrace menu does not appear, see [Troubleshooting](#troubleshooting).
 
 ## Quick Start Guide
 
-The Spectrace plugin eliminates all manual GIMP setup. The complete workflow is:
+The Spectrace plugin eliminates all manual GIMP setup. There are two import workflows:
 
-**Open WAV** &rarr; **Setup Annotation** &rarr; **Draw** &rarr; **Save**
+- **Standard Import**: Open a WAV file, annotate the full spectrogram
+- **CallMark Import**: Load a CallMark Excel export, filter by individual/cluster, and navigate through vocalizations one-by-one
 
-### 1. Open Your WAV File in GIMP
-
-1. In GIMP, go to `File > Open`
-2. Navigate to your WAV audio file and select it
-3. The plugin automatically:
-   - Generates a spectrogram using librosa (via the `spectrace` conda environment)
-   - Creates a project folder in `projects/` with the spectrogram PNG and metadata
-   - Loads the spectrogram into GIMP as a new image
-
-![GIMP File > Open dialog with orca.wav selected, showing spectrogram preview](docs/images/gimp-open-wav.png)
-
-> **Tip:** You can open any WAV file from anywhere on your computer — it does not need to be in the `audio/` directory. The plugin will create the project folder for you automatically.
-
-> **Note:** If you open the same WAV file again, the plugin reuses the most recent existing spectrogram instead of regenerating it. To create a new annotation pass for the same audio, see [Multiple Projects per Audio File](#multiple-projects-per-audio-file).
-
-### 2. Set Up Annotation Layers
-
-1. Right-click the canvas (or use the menu bar if visible)
-2. Go to `Filters > Spectrace > Setup Annotation...`
-3. A dialog appears asking for a **Template XCF file**:
-   - **Leave it blank** to use the built-in orca template (26 layers for killer whale vocalizations)
-   - **Or browse** to a custom template XCF file (see [Template Customization](#template-customization))
-4. Click OK
-
-<!-- (PICTURE RECOMMENDED: Screenshot of the Setup Annotation dialog, then the Layers panel showing all 26 created layers) -->
-
-The plugin automatically:
-- Creates the full annotation layer hierarchy (all 26 layers with correct grouping)
-- Sets the Pencil tool to the correct settings (1px, hardness 100, dynamics off)
-- Starts a background monitor that enforces tool settings and auto-switches foreground colors when you change layers
-
-**You are now ready to draw.**
-
-### 3. Draw Your Annotations
-
-1. **Expand the layer group** in the Layers panel (click the `+` icon next to `OrcinusOrca_FrequencyContours`)
-2. **Click on a layer** to select it (e.g., `f0_LFC` for fundamental frequency)
-   - The foreground color changes automatically to that layer's assigned color
-3. **Zoom in** for precision: use `View > Zoom > 2:1 (200%)` or scroll-wheel zoom
-
-<!-- (PICTURE RECOMMENDED: Screenshot showing the expanded layer panel with a layer selected, and the foreground color matching that layer) -->
-
-4. **Draw** along the frequency contour on the spectrogram
-   - The Pencil tool is already configured — just draw
-   - Use `Ctrl+Z` (`Cmd+Z` on Mac) to undo mistakes
-
-5. **Switch to Eraser** when you need to correct:
-   - Select the Eraser tool from the toolbox
-   - The eraser size is adjustable (unlike the pencil, which is locked to 1px)
-   - The plugin remembers your eraser size across tool switches
-
-<!-- (PICTURE RECOMMENDED: Before/after showing a contour being drawn on the spectrogram, with the annotation visible as a colored line over the spectrogram) -->
-
-**Drawing Tips:**
-
-- Draw along the frequency contour you wish to annotate
-- Switch layers by clicking layer names in the Layers panel — the color updates automatically
-- Toggle layer visibility using the "eye" icon to check your work
-- Start with the bottom layer in the list and work upward to avoid forgetting layers
-- If the pencil stops working correctly, use `Filters > Spectrace > Reset Tool Settings`
-
-**What to Draw:**
-
-- Draw all contours that are within the onset and offset boundaries of the vocalization
-- If multiple calls from the **same vocalization** are present, draw them all in one project
-- If calls from **different individuals/vocalizations** are present, create separate projects for each
-
-### 4. Save Your Work
-
-1. `File > Save As...` (first time) or `Ctrl+S` (subsequent saves)
-2. Save the XCF file in your project folder: `projects/your_audio_file_0/your_audio_file_0.xcf`
-3. The XCF filename should match the project folder name
+Both workflows end the same way: draw contours on annotation layers, save.
 
 ### GIF Demonstrations
 
-These GIF demonstrations show the annotation workflow:
-
-**Full workflow demo:**
+**Full workflow demo (CallMark import):**
 ![Spectrace annotation workflow demo](docs/images/spectrace-demo.gif)
 
 **Drawing contours:**
@@ -209,6 +138,145 @@ These GIF demonstrations show the annotation workflow:
 
 **Saving your work:**
 ![clip3](https://github.com/user-attachments/assets/c4f07c9f-a1de-4ef9-933a-60ca48df8a0c)
+
+---
+
+### Workflow A: Standard Import
+
+**Open WAV** &rarr; **Setup Annotation** &rarr; **Draw** &rarr; **Save**
+
+#### 1. Open Your WAV File in GIMP
+
+1. In GIMP, go to `File > Open`
+2. Navigate to your WAV audio file and select it
+3. The **Spectrace - Import** dialog appears:
+
+![Spectrace Import dialog — standard mode with CallMark unchecked](docs/images/import-dialog-basic.png)
+
+4. Leave the **CallMark import** checkbox unchecked
+5. Optionally browse to a custom template XCF, or leave it as `(default orca template)`
+6. Click OK
+
+The plugin automatically:
+- Generates a spectrogram using librosa (via the `spectrace` conda environment)
+- Creates a project folder in `projects/` with the spectrogram PNG and metadata
+- Loads the spectrogram into GIMP
+
+> **Tip:** You can open any WAV file from anywhere on your computer. The plugin creates the project folder automatically.
+
+> **Note:** If you open the same WAV file again, the plugin reuses the most recent existing spectrogram instead of regenerating it.
+
+#### 2. Set Up Annotation Layers
+
+1. Go to `Filters > Spectrace > Setup Annotation`
+2. The plugin creates the full annotation layer hierarchy (all 26 layers with correct grouping), sets the Pencil tool to correct settings (1px, hardness 100, dynamics off), and starts a background monitor that enforces tool settings and auto-switches foreground colors when you change layers
+
+![Annotation layers panel showing all 26 layers](docs/images/annotation-layers-panel.png)
+
+**You are now ready to draw.**
+
+#### 3. Draw Your Annotations
+
+1. **Expand the layer group** in the Layers panel (click the `+` icon next to `OrcinusOrca_FrequencyContours`)
+2. **Click on a layer** to select it (e.g., `f0_LFC` for fundamental frequency) — the foreground color changes automatically
+3. **Zoom in** for precision: use `View > Zoom > 2:1 (200%)` or scroll-wheel zoom
+4. **Draw** along the frequency contour on the spectrogram — the Pencil tool is already configured
+5. **Switch to Eraser** when you need to correct — the eraser size is adjustable and remembered across tool switches
+
+![Spectrogram with annotation contour drawn](docs/images/annotation-drawn.png)
+
+**Drawing Tips:**
+- Switch layers by clicking layer names in the Layers panel — the color updates automatically
+- Toggle layer visibility using the "eye" icon to check your work
+- If the pencil stops working correctly, use `Filters > Spectrace > Reset Tool Settings`
+- Use `Ctrl+Z` (`Cmd+Z` on Mac) to undo mistakes
+
+**What to Draw:**
+- Draw all contours within the onset and offset boundaries of the vocalization
+- If multiple calls from the **same vocalization** are present, draw them all in one project
+- If calls from **different individuals/vocalizations** are present, create separate projects for each
+
+#### 4. Save Your Work
+
+1. `File > Save As...` (first time) or `Ctrl+S` (subsequent saves)
+2. Save the XCF file in your project folder: `projects/your_audio_file_0/your_audio_file_0.xcf`
+3. The XCF filename should match the project folder name
+
+---
+
+### Workflow B: CallMark Import
+
+**Open WAV** &rarr; **Select Excel + Filters** &rarr; **Setup Annotation** &rarr; **Draw** &rarr; **Next Vocalization** &rarr; **Repeat**
+
+CallMark import is designed for batch annotation of vocalizations catalogued by [CallMark](https://github.com/paladinprime/callmark). It segments a long recording into individual vocalizations using onset/offset times from a CallMark Excel export, and lets you navigate through them one-by-one inside GIMP.
+
+#### 1. Open Your WAV File and Configure CallMark
+
+1. In GIMP, go to `File > Open` and select your WAV file
+2. In the **Spectrace - Import** dialog, check **CallMark import**
+3. Additional fields appear:
+
+![Spectrace Import dialog with CallMark import enabled](docs/images/import-dialog-callmark.png)
+
+4. Click **Browse...** next to "Excel file" and select your CallMark `.xlsx` export
+5. The plugin parses the Excel file and populates the filter dropdowns:
+
+![CallMark import fully configured — 331 vocalizations from ZF.wav](docs/images/callmark-configured.png)
+
+6. **Filter by Individual**: Select a specific individual ID or leave as "All"
+7. **Filter by Cluster**: Select a specific cluster name or leave as "All"
+8. The vocalization count updates live as you change filters
+9. **Start At**: Optionally set the starting vocalization number (useful for resuming work)
+10. Click OK
+
+The plugin generates a spectrogram for the first vocalization and loads it into GIMP.
+
+#### 2. Set Up Annotation Layers and Draw
+
+Same as the standard workflow:
+1. Go to `Filters > Spectrace > Setup Annotation`
+2. Draw your contours on the annotation layers
+
+#### 3. Navigate to the Next Vocalization
+
+When you finish annotating a vocalization:
+
+1. Go to `Filters > Spectrace > Next Vocalization`
+
+![Filters > Spectrace submenu showing Next Vocalization, Reset Tool Settings, Setup Annotation](docs/images/spectrace-menu-full.png)
+
+2. The plugin automatically:
+   - Saves your current XCF file
+   - Generates the spectrogram for the next vocalization (or reopens an existing XCF if you previously annotated it)
+   - Loads it into the same GIMP window (no duplicate windows)
+   - Displays a status message: vocalization number, individual, cluster, category, and age
+
+3. Repeat: **Setup Annotation** &rarr; **Draw** &rarr; **Next Vocalization** until done
+
+#### CallMark Session Persistence
+
+The plugin saves session state to `~/.spectrace/callmark_session.json`. If GIMP closes mid-session, you can resume by opening the same WAV file with the same CallMark settings and using the **Start At** spinner to jump to where you left off.
+
+#### CallMark Project Folder Structure
+
+CallMark imports create a nested folder hierarchy:
+
+```
+projects/
+└── your_audio_file_0/
+    └── R3277/                        # subfolder named by filter (individual, cluster, or both)
+        ├── v000/                     # vocalization 0
+        │   ├── v000_spectrogram.png
+        │   ├── your_audio_file.wav   # segment WAV
+        │   ├── v000.xcf             # annotations
+        │   └── metadata.csv
+        ├── v001/                     # vocalization 1
+        │   └── ...
+        └── v002/
+            └── ...
+```
+
+The subfolder name reflects the active filters (e.g., `R3277`, `vocal`, or `R3277_vocal` if both individual and cluster are selected).
 
 ---
 
@@ -229,8 +297,6 @@ These GIF demonstrations show the annotation workflow:
 **Checking your work:**
 
 Click the "eye" icons next to layers to toggle visibility — this helps verify each contour is on the correct layer.
-
-<!-- (PICTURE RECOMMENDED: Screenshot showing the eye icon toggled off for one layer to reveal the annotation underneath) -->
 
 ---
 
@@ -332,7 +398,7 @@ Extraction methods:
 
 ### Project Structure
 
-Each project folder (created automatically when you open a WAV file) contains:
+**Standard import** — one folder per annotation pass:
 
 ```
 projects/
@@ -342,6 +408,21 @@ projects/
     ├── your_audio_file_0.xcf              # GIMP file with annotations
     ├── metadata.pkl                        # Project metadata
     └── metadata.csv                        # Human-readable metadata
+```
+
+**CallMark import** — nested by filter and vocalization index:
+
+```
+projects/
+└── your_audio_file_0/
+    └── R3277/                              # filter subfolder
+        ├── v000/
+        │   ├── v000_spectrogram.png
+        │   ├── your_audio_file.wav         # segment WAV
+        │   ├── v000.xcf
+        │   └── metadata.csv
+        ├── v001/
+        └── ...
 ```
 
 ### Layer Organization
@@ -449,6 +530,61 @@ To create your own annotation template for a different species or use case:
 When running `Setup Annotation`, browse to your template XCF — the plugin will dynamically extract the layer structure and generate unique colors for each layer.
 
 **Note:** Templates created in GIMP 2.10 must be used exclusively with GIMP 2.10. Do not open or save them in GIMP 3.0.
+
+---
+
+## Heterodyne Validation
+
+The heterodyne validation pipeline checks the physical consistency of your annotations. It extracts `f0_HFC` and `f0_LFC` fundamental frequency contours from your annotated masks, computes predicted heterodyne frequencies using the relationship `f_het = n * f_HFC +/- k * f_LFC`, and compares these predictions against your annotated heterodyne contours.
+
+This serves as a quality check: if annotations are physically consistent, predicted heterodynes should overlap with annotated ones.
+
+### Running Validation
+
+```bash
+conda activate spectrace
+
+# Single clip
+python heterodyne_validation.py --hdf5 ml_data/clip.hdf5
+
+# Batch mode (all HDF5 files in a directory)
+python heterodyne_validation.py --hdf5-dir ml_data/
+
+# With custom parameters
+python heterodyne_validation.py --hdf5 clip.hdf5 --kernel-size 7 --max-k 3
+
+# Skip plot generation
+python heterodyne_validation.py --hdf5 clip.hdf5 --no-plots
+```
+
+### What It Computes
+
+For each heterodyne order (0 through 12), the pipeline reports:
+
+**Node-level metrics** (pixel-by-pixel mask comparison):
+- **IoU** (Intersection over Union) — overall spatial overlap between predicted and annotated masks
+- **Precision / Recall / F1** — TP/FP/FN per frequency bin
+
+**Contour-level metrics** (frequency trajectory comparison):
+- **Coverage** — percentage of annotated frames that matched a prediction
+- **Fragmentation** — measures discontinuity in matched regions
+- **Frequency Deviation** — mean absolute error on matched frames (Hz)
+- **Contour Recall / Precision** — percentage of frames within a frequency tolerance
+
+### Outputs
+
+- **CSV file** with one row per heterodyne order, containing all metrics
+- **PNG visualizations** (unless `--no-plots`):
+  - Metrics bar chart (IoU and tolerance accuracy per order)
+  - Per-order contour overlay plots (predicted in cyan, annotated in magenta)
+
+### How Heterodyne Orders Map to Layers
+
+| Heterodyne Layer | HFC Multiplier | Formula |
+|---|---|---|
+| `Heterodynes/0` | 1 (fundamental) | `1 * f_HFC +/- k * f_LFC` |
+| `Heterodynes/1` | 2 (1st harmonic) | `2 * f_HFC +/- k * f_LFC` |
+| `Heterodynes/N` | N+1 | `(N+1) * f_HFC +/- k * f_LFC` |
 
 ---
 
