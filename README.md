@@ -133,12 +133,6 @@ Both workflows end the same way: draw contours on annotation layers, save.
 **Full workflow demo (CallMark import):**
 ![Spectrace annotation workflow demo](docs/images/spectrace-demo.gif)
 
-**Drawing contours:**
-![clip2](https://github.com/user-attachments/assets/0b40cdfb-3127-425b-9b9e-8ce0af64f9a4)
-
-**Saving your work:**
-![clip3](https://github.com/user-attachments/assets/c4f07c9f-a1de-4ef9-933a-60ca48df8a0c)
-
 ---
 
 ### Workflow A: Standard Import
