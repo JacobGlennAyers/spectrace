@@ -113,7 +113,7 @@ The installer automatically:
    - `Reset Tool Settings`
    - `Setup Annotation`
 
-![GIMP 2.10 with Spectrace plugin — Filters > Spectrace submenu](docs/images/spectrace-menu-full.png)
+![GIMP 2.10 with Spectrace plugin — Filters > Spectrace submenu](docs/images/setup-annotation-menu.png)
 
 If the Spectrace menu does not appear, see [Troubleshooting](#troubleshooting).
 
@@ -149,10 +149,7 @@ Both workflows end the same way: draw contours on annotation layers, save.
 
 1. In GIMP, go to `File > Open`
 2. Navigate to your WAV audio file and select it
-3. The **Spectrace - Import** dialog appears:
-
-![Spectrace Import dialog — standard mode with CallMark unchecked](docs/images/import-dialog-basic.png)
-
+3. The **Spectrace - Import** dialog appears
 4. Leave the **CallMark import** checkbox unchecked
 5. Optionally browse to a custom template XCF, or leave it as `(default orca template)`
 6. Click OK
@@ -171,7 +168,7 @@ The plugin automatically:
 1. Go to `Filters > Spectrace > Setup Annotation`
 2. The plugin creates the full annotation layer hierarchy (all 26 layers with correct grouping), sets the Pencil tool to correct settings (1px, hardness 100, dynamics off), and starts a background monitor that enforces tool settings and auto-switches foreground colors when you change layers
 
-![Annotation layers panel showing all 26 layers](docs/images/annotation-layers-panel.png)
+![GIMP with annotation layers created and ready to draw](docs/images/annotation-layers-panel.png)
 
 **You are now ready to draw.**
 
@@ -182,8 +179,6 @@ The plugin automatically:
 3. **Zoom in** for precision: use `View > Zoom > 2:1 (200%)` or scroll-wheel zoom
 4. **Draw** along the frequency contour on the spectrogram — the Pencil tool is already configured
 5. **Switch to Eraser** when you need to correct — the eraser size is adjustable and remembered across tool switches
-
-![Spectrogram with annotation contour drawn](docs/images/annotation-drawn.png)
 
 **Drawing Tips:**
 - Switch layers by clicking layer names in the Layers panel — the color updates automatically
@@ -212,22 +207,21 @@ CallMark import is designed for batch annotation of vocalizations catalogued by 
 
 #### 1. Open Your WAV File and Configure CallMark
 
-1. In GIMP, go to `File > Open` and select your WAV file
+1. In GIMP, go to `File > Open` and select your WAV file:
+
+![GIMP File > Open dialog with WAV file selected](docs/images/gimp-open-wav.png)
+
 2. In the **Spectrace - Import** dialog, check **CallMark import**
-3. Additional fields appear:
+3. Click **Browse...** next to "Excel file" and select your CallMark `.xlsx` export
+4. The plugin parses the Excel file and populates the filter dropdowns:
 
-![Spectrace Import dialog with CallMark import enabled](docs/images/import-dialog-callmark.png)
+![Spectrace Import dialog with CallMark import enabled and filters visible](docs/images/import-dialog-callmark.png)
 
-4. Click **Browse...** next to "Excel file" and select your CallMark `.xlsx` export
-5. The plugin parses the Excel file and populates the filter dropdowns:
-
-![CallMark import fully configured — 331 vocalizations from ZF.wav](docs/images/callmark-configured.png)
-
-6. **Filter by Individual**: Select a specific individual ID or leave as "All"
-7. **Filter by Cluster**: Select a specific cluster name or leave as "All"
-8. The vocalization count updates live as you change filters
-9. **Start At**: Optionally set the starting vocalization number (useful for resuming work)
-10. Click OK
+5. **Filter by Individual**: Select a specific individual ID or leave as "All"
+6. **Filter by Cluster**: Select a specific cluster name or leave as "All"
+7. The vocalization count updates live as you change filters
+8. **Start At**: Optionally set the starting vocalization number (useful for resuming work)
+9. Click OK
 
 The plugin generates a spectrogram for the first vocalization and loads it into GIMP.
 
