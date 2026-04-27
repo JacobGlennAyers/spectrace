@@ -175,21 +175,32 @@ def add_padding(
     offset_sec: float,
     padding_sec: float = 0.05,
     wav_duration_sec: Optional[float] = None,
+    padding_left_sec: Optional[float] = None,
+    padding_right_sec: Optional[float] = None,
 ) -> Tuple[float, float]:
     """
     Add padding around a vocalization segment for visual context.
 
+    Supports symmetric padding via ``padding_sec`` (legacy API) or
+    asymmetric padding via ``padding_left_sec`` / ``padding_right_sec``.
+    If either asymmetric value is supplied, it overrides ``padding_sec``
+    for that side; the other side falls back to ``padding_sec``.
+
     Args:
-        onset_sec:        Segment start time in seconds.
-        offset_sec:       Segment end time in seconds.
-        padding_sec:      Padding to add on each side (default 50ms).
-        wav_duration_sec: Total WAV duration for clamping. None = no upper clamp.
+        onset_sec:         Segment start time in seconds.
+        offset_sec:        Segment end time in seconds.
+        padding_sec:       Symmetric padding fallback (default 50ms).
+        wav_duration_sec:  Total WAV duration for clamping. None = no upper clamp.
+        padding_left_sec:  Explicit pre-onset padding override.
+        padding_right_sec: Explicit post-offset padding override.
 
     Returns:
         (padded_onset_sec, padded_offset_sec) clamped to [0, wav_duration_sec].
     """
-    padded_onset = max(0.0, onset_sec - padding_sec)
-    padded_offset = offset_sec + padding_sec
+    left = padding_sec if padding_left_sec is None else padding_left_sec
+    right = padding_sec if padding_right_sec is None else padding_right_sec
+    padded_onset = max(0.0, onset_sec - left)
+    padded_offset = offset_sec + right
     if wav_duration_sec is not None:
         padded_offset = min(padded_offset, wav_duration_sec)
     return padded_onset, padded_offset

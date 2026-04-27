@@ -62,6 +62,12 @@ DEFAULT_CONFIG = {
     "default_nfft": 2048,
     "default_grayscale": True,
     "default_project_dir": "projects",
+    # CallMark context padding: seconds of audio added before onset / after
+    # offset when extracting a vocalization segment. Asymmetric because
+    # whale calls typically benefit from more run-in context than run-out.
+    # Set both to 0.0 to restore the original flush-to-boundary behaviour.
+    "default_callmark_padding_left_sec": 0.3,
+    "default_callmark_padding_right_sec": 0.15,
 }
 
 def load_config():
@@ -657,6 +663,8 @@ _CALLMARK_SESSION = {
     "project_folders": {},
     "nfft": 2048,
     "grayscale": True,
+    "padding_left_sec": 0.3,
+    "padding_right_sec": 0.15,
     "current_image": None,
     "spectrace_root": "",
     "project_dir": "",
@@ -683,6 +691,8 @@ def _save_callmark_session():
         "project_folders": {str(k): v for k, v in session["project_folders"].items()},
         "nfft": session["nfft"],
         "grayscale": session["grayscale"],
+        "padding_left_sec": session.get("padding_left_sec", 0.3),
+        "padding_right_sec": session.get("padding_right_sec", 0.15),
         "spectrace_root": session["spectrace_root"],
         "project_dir": session["project_dir"],
         "template_xcf": session.get("template_xcf", ""),
@@ -718,6 +728,8 @@ def _load_callmark_session():
         }
         _CALLMARK_SESSION["nfft"] = data.get("nfft", 2048)
         _CALLMARK_SESSION["grayscale"] = data.get("grayscale", True)
+        _CALLMARK_SESSION["padding_left_sec"] = float(data.get("padding_left_sec", 0.3))
+        _CALLMARK_SESSION["padding_right_sec"] = float(data.get("padding_right_sec", 0.15))
         _CALLMARK_SESSION["spectrace_root"] = data.get("spectrace_root", "")
         _CALLMARK_SESSION["project_dir"] = data.get("project_dir", "")
         _CALLMARK_SESSION["template_xcf"] = data.get("template_xcf", "")
@@ -1206,6 +1218,12 @@ def _load_wav_callmark_mode(filename, clip_basename, project_dir, callmark_resul
     _CALLMARK_SESSION["project_folders"] = {}
     _CALLMARK_SESSION["nfft"] = config.get("default_nfft", 2048)
     _CALLMARK_SESSION["grayscale"] = config.get("default_grayscale", True)
+    _CALLMARK_SESSION["padding_left_sec"] = float(
+        config.get("default_callmark_padding_left_sec", 0.3)
+    )
+    _CALLMARK_SESSION["padding_right_sec"] = float(
+        config.get("default_callmark_padding_right_sec", 0.15)
+    )
     _CALLMARK_SESSION["spectrace_root"] = spectrace_root
     _CALLMARK_SESSION["project_dir"] = project_dir
     _CALLMARK_SESSION["template_xcf"] = template_xcf
@@ -1299,6 +1317,8 @@ def _generate_callmark_segment(index):
         "--subfolder", subfolder,
         "--voc-index", str(index),
         "--callmark-meta", json.dumps(voc),
+        "--padding-left-sec", str(session.get("padding_left_sec", 0.3)),
+        "--padding-right-sec", str(session.get("padding_right_sec", 0.15)),
     ]
     if session["grayscale"]:
         args_list.append("--grayscale")

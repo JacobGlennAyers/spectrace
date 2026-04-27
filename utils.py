@@ -106,6 +106,8 @@ def create_callmark_project(
     callmark_meta: dict,
     nfft: int = 2048,
     grayscale: bool = True,
+    padding_left_sec: float = 0.0,
+    padding_right_sec: float = 0.0,
 ) -> dict:
     """
     Create a Spectrace project folder for a single CallMark vocalization segment.
@@ -119,13 +121,15 @@ def create_callmark_project(
     Trimmed segment WAV + spectrogram are generated in the vocalization folder.
 
     Args:
-        project_root:   Root project directory (e.g., "projects").
-        clip_path:      Path to the full WAV file.
-        subfolder:      Subfolder name under clip dir (derived from filter selections).
-        voc_index:      Zero-based vocalization index within the filtered list.
-        callmark_meta:  Dict with onset_sec, offset_sec, duration_sec, and other CallMark fields.
-        nfft:           FFT window size for spectrogram generation.
-        grayscale:      Whether to generate grayscale spectrogram.
+        project_root:      Root project directory (e.g., "projects").
+        clip_path:         Path to the full WAV file.
+        subfolder:         Subfolder name under clip dir (derived from filter selections).
+        voc_index:         Zero-based vocalization index within the filtered list.
+        callmark_meta:     Dict with onset_sec, offset_sec, duration_sec, and other CallMark fields.
+        nfft:              FFT window size for spectrogram generation.
+        grayscale:         Whether to generate grayscale spectrogram.
+        padding_left_sec:  Seconds of audio to include before onset_sec (0 = flush).
+        padding_right_sec: Seconds of audio to include after offset_sec (0 = flush).
 
     Returns:
         Updated audio_dict with all project paths and metadata.
@@ -144,11 +148,19 @@ def create_callmark_project(
     if not os.path.exists(recording_wav):
         shutil.copy2(clip_path, recording_wav)
 
-    # Build audio_dict for process_audio_project-style spectrogram generation
-    # Extract exactly the onset-to-offset segment (same as whale workflow where
-    # the WAV file IS the segment — no padding, no trimming beyond the boundaries)
-    onset_sec = callmark_meta["onset_sec"]
-    offset_sec = callmark_meta["offset_sec"]
+    # Apply asymmetric context padding so the annotated call doesn't sit
+    # flush against the spectrogram edge. Defaults are 0/0 (legacy flush
+    # behaviour) — the plugin passes real values from its config.
+    from callmark_utils import add_padding
+
+    raw_onset_sec = callmark_meta["onset_sec"]
+    raw_offset_sec = callmark_meta["offset_sec"]
+    onset_sec, offset_sec = add_padding(
+        raw_onset_sec,
+        raw_offset_sec,
+        padding_left_sec=padding_left_sec,
+        padding_right_sec=padding_right_sec,
+    )
     duration_sec = offset_sec - onset_sec
 
     audio_dict = {

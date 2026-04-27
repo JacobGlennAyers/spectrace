@@ -1,0 +1,51 @@
+# Paper drafts, proposals, meeting notes — kept out of the public repo
+CLAUDE.md
+MEETING_APRIL_3.md
+PAPER_DRAFT.md
+paper_draft.tex
+spectrace_paper/
+spectrace_paper */
+spectrace_paper.zip
+spectrace_improvements_proposal.pdf
+docs/feature_comparison.md
+docs/cd2_annotation_checklist.md
+
+# Presentations
+*.pptx
+~$*.pptx
+presentation.tex
+presentation_draft.md
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Local Claude / GSD workspaces
+.claude/
+.planning/
+
+# Data and working outputs — not tracked
+annotations/
+current_spectrace_data/
+spectrace_pascale/
+callmarkexportexample/
+projects/*/
+visualizations/*/
+diagrams/
+screenshots/
+meeting_images/
+issues/
+
+# Paper / presentation figure-generation scripts (not part of core pipeline)
+generate_heterodyne_figure.py
+generate_heterodyne_pipeline_figure.py
+generate_metrics_table_figure.py
+generate_annotation_ladder_figure.py
+run_paper_table_metrics.py
+analyze_pascale_results.py

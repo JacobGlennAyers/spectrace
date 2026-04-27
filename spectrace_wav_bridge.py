@@ -118,6 +118,8 @@ def mode_segment_spectrogram(args):
             callmark_meta=callmark_meta,
             nfft=args.nfft,
             grayscale=args.grayscale,
+            padding_left_sec=args.padding_left_sec,
+            padding_right_sec=args.padding_right_sec,
         )
     finally:
         sys.stdout = real_stdout
@@ -155,6 +157,10 @@ def main():
     parser.add_argument("--voc-index", type=int, default=0,
                         help="Vocalization index within filtered list")
     parser.add_argument("--callmark-meta", help="JSON string with CallMark metadata for this segment")
+    parser.add_argument("--padding-left-sec", type=float, default=0.0,
+                        help="Seconds of audio to prepend before onset_sec (CallMark mode only)")
+    parser.add_argument("--padding-right-sec", type=float, default=0.0,
+                        help="Seconds of audio to append after offset_sec (CallMark mode only)")
 
     args = parser.parse_args()
 
