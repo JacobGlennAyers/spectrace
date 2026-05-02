@@ -26,7 +26,6 @@ This tool is particularly useful for creating training datasets for machine lear
 - **Heterodyne Validation**: Validate annotated heterodyne contours against predicted frequencies computed from HFC/LFC fundamentals using IoU and contour-level metrics
 - **Multiple Export Formats**: Convert annotations to HDF5 for ML pipelines or Excel for spreadsheet analysis
 - **Batch Visualization**: Generate overlay and individual layer visualizations across all projects
-- **Binary Morphology Tools**: Included utilities for post-processing binary masks
 
 ---
 
@@ -114,8 +113,6 @@ The installer automatically:
    - `Setup Annotation`
 
 ![GIMP 2.10 with Spectrace plugin — Filters > Spectrace submenu](docs/images/setup-annotation-menu.png)
-
-If the Spectrace menu does not appear, see [Troubleshooting](#troubleshooting).
 
 ---
 
@@ -268,44 +265,7 @@ The subfolder name reflects the active filters (e.g., `R3277`, `vocal`, or `R327
 
 ---
 
-## Managing Layers and Corrections
-
-**If you drew on the wrong layer:**
-
-1. Click on the layer with incorrect contours
-2. Zoom out: `View > Zoom > 1:1 (100%)`
-3. Select the Rectangle Select tool
-4. Draw a rectangle around the contours to copy
-5. Press `Ctrl+C` to copy
-6. Click on the correct destination layer
-7. Press `Ctrl+V` to paste
-8. A "Floating Selection (Pasted Layer)" will appear — right-click it and select `Anchor Layer`
-9. Erase any unwanted contours from the original layer
-
-**Checking your work:**
-
-Click the "eye" icons next to layers to toggle visibility — this helps verify each contour is on the correct layer.
-
----
-
-## Post-Annotation: Visualization and Export
-
-### Visualize Your Annotations
-
-```bash
-conda activate spectrace
-python produce_visuals.py
-```
-
-Edit `produce_visuals.py` to set your audio file basename:
-
-```python
-clip_basename = "your_audio_file"  # without extension or index number
-```
-
-This creates overlay and individual layer visualizations in the `visualizations/` folder.
-
-### Convert to HDF5 Format
+## Convert to HDF5 Format
 
 For ML pipelines, convert XCF annotations to HDF5:
 
@@ -441,36 +401,6 @@ OrcinusOrca_FrequencyContours/
 └── unsure_LFC
 ```
 
-**Key abbreviations:**
-- **HFC** = High-Frequency Component (for biphonic calls)
-- **LFC** = Low-Frequency Component (for biphonic calls or monophonic calls)
-- **f0** = Fundamental frequency
-
-**Usage notes:**
-- For **biphonic calls**, use both HFC and LFC layer sets
-- For **monophonic calls**, use only LFC layer sets
-- Heterodynes are numbered according to which harmonic of the HFC they're affiliated with
-- Use "unsure" layers when classification is ambiguous
-
-The template is designed for killer whale (orca) vocalizations but can be adapted for other species. See `templates/orca_template.yaml` for complete documentation with scientific references.
-
-The script increments the project index automatically (`your_audio_file_0`, `your_audio_file_1`, etc.).
-
-### Color Mapping
-
-The first time you visualize a project, Spectrace automatically:
-- Discovers all layer names from your template or existing projects
-- Assigns a unique color to each annotation class
-- Saves the mapping to `layer_color_mapping.json`
-
-This ensures consistent colors across all visualizations. To use a master template:
-
-```python
-template_xcf_path = "./templates/orca_template.xcf"
-```
-
-Or set to `None` to auto-discover from existing projects.
-
 ### Configuration File
 
 The install script creates `~/.spectrace/config.json` (or `%USERPROFILE%\.spectrace\config.json` on Windows):
@@ -575,60 +505,6 @@ For each heterodyne order (0 through 12), the pipeline reports:
 | `Heterodynes/N` | N+1 | `(N+1) * f_HFC +/- k * f_LFC` |
 
 ---
-
-## Binary Morphology Operations
-
-The `demos/` folder includes examples of common binary morphology operations (erosion, dilation, opening, closing) for post-processing binary masks. These can clean up annotations, connect nearby regions, or extract specific features.
-
-- `demos/binary_morphology_interactive.ipynb` — interactive Jupyter notebook examples
-- `demos/bin_morph.py` — standalone demonstration script
-
----
-
-## Troubleshooting
-
-### Plugin Not Appearing in Filters Menu
-
-- **Verify the plugin file is in the correct directory:**
-
-  | Platform | Expected Location |
-  |----------|-------------------|
-  | macOS | `~/Library/Application Support/GIMP/2.10/plug-ins/spectrace_annotator.py` |
-  | Linux | `~/.config/GIMP/2.10/plug-ins/spectrace_annotator.py` |
-  | Linux (Flatpak) | `~/.var/app/org.gimp.GIMP/config/GIMP/2.10/plug-ins/spectrace_annotator.py` |
-  | Windows | `%APPDATA%\GIMP\2.10\plug-ins\spectrace_annotator.py` |
-
-- **Linux/macOS:** Ensure the file is executable: `chmod +x <path>/spectrace_annotator.py`
-- **Did you restart GIMP?** The plugin only loads at startup — you must fully close and reopen GIMP.
-- **Check GIMP version:** `Help > About` must show 2.10.x
-
-### WAV File Won't Open / Spectrogram Not Generated
-
-- The plugin calls the `spectrace` conda environment via subprocess. Check `~/.spectrace/config.json`:
-  - Is `python3_path` pointing to a valid Python executable?
-  - Is `spectrace_root` pointing to the correct directory containing `spectrace_wav_bridge.py`?
-- Test manually: `conda activate spectrace && python spectrace_wav_bridge.py --wav /path/to/file.wav --output-dir ./projects --nfft 2048 --grayscale`
-- Check the debug log at `/tmp/spectrace_debug.log` for detailed error messages
-
-### Pencil Not Drawing
-
-- Use `Filters > Spectrace > Reset Tool Settings` to force correct settings
-- Make sure you clicked on a **layer** (not a layer group) in the Layers panel
-- The plugin enforces settings automatically — if drawing still fails, check the debug log at `/tmp/spectrace_debug.log`
-
-### Tool Options Look Wrong / Stale Values
-
-The plugin sets tool parameters via GIMP's API, but the tool options panel display may not update visually. The tool *behaves* correctly. Click `Filters > Spectrace > Reset Tool Settings` if unsure.
-
-
-### Python Packages Not Found
-
-```bash
-conda activate spectrace
-conda env remove -n spectrace       # if corrupted
-conda env create -f environment.yml  # reinstall
-```
-
 
 ## Compatibility
 
