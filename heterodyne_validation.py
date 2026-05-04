@@ -3,13 +3,10 @@
 Heterodyne validation: predict heterodyne frequencies from annotated HFC/LFC
 fundamentals and compare against labelled heterodyne contours.
 
-Core Deliverable 3 of the Spectrace semester project.
 
 Key formula: heterodyne_freq = (n+1) * f_HFC +/- k * f_LFC
 where n is the heterodyne order (0 = affiliated with HFC fundamental,
 1 = affiliated with 1st HFC harmonic, etc.)
-
-Reference: Miller et al. 2007 (PMC7392277), Filatova et al. 2020
 
 Supports two comparison modes:
   - Node-level (pixel IoU): strict pixel-by-pixel mask comparison with dilation
