@@ -907,12 +907,7 @@ def validate_single_clip(
         f0_hfc = extract_f0_contour(f0_hfc_mask, meta.sample_rate, meta.nfft, meta.noverlap)
         f0_lfc = extract_f0_contour(f0_lfc_mask, meta.sample_rate, meta.nfft, meta.noverlap)
 
-        # Savitzky-Golay denoising within contiguous runs (see
-        # smooth_f0_contour docstring for rationale). This is the
-        # single place pen quantization is addressed: every downstream
-        # prediction, mask, and metric inherits the smoothed inputs,
-        # so the figure rendering and the Table 2 metrics stay
-        # coherent by construction.
+ 
         f0_hfc = smooth_f0_contour(f0_hfc)
         f0_lfc = smooth_f0_contour(f0_lfc)
 
@@ -1203,7 +1198,7 @@ def generate_visualizations(
         fig.savefig(os.path.join(output_dir, f"{clip_name}_metrics_chart.png"), dpi=150)
         plt.close(fig)
 
-    # --- 2. Per-order contour plots (zoomed, line-based like Jacob's script) ---
+    # --- 2. Per-order contour plots ---
     if predicted_freq_arrays is None:
         return
 
