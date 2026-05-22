@@ -44,14 +44,48 @@ if not exist "%GIMP_DIR%\plug-ins" mkdir "%GIMP_DIR%\plug-ins"
 copy /y "%SCRIPT_DIR%\spectrace_annotator.py" "%GIMP_DIR%\plug-ins\" >nul
 echo   -^> Done
 
-REM 2. Install gimprc
-echo [2/6] Installing gimprc (hides menubar, rulers)...
-if exist "%SCRIPT_DIR%\config\gimprc" (
-    copy /y "%SCRIPT_DIR%\config\gimprc" "%GIMP_DIR%\" >nul
-    echo   -^> Done
-) else (
-    echo   -^> Skipped (no gimprc found)
-)
+REM 2. Write Windows-specific gimprc
+REM On Windows the menubar must stay visible: GTK right-click context menus
+REM do not expose Filters, so annotators need the File/Filters bar to reach
+REM Filters > Spectrace.  Write inline instead of copying config/gimprc
+REM (which sets show-menubar no for Mac/Linux where right-click works).
+echo [2/6] Installing gimprc (keeps menubar, hides rulers)...
+(
+echo # Spectrace GIMP configuration (Windows)
+echo (default-view
+echo     (show-menubar yes)
+echo     (show-statusbar yes)
+echo     (show-rulers no)
+echo     (show-scrollbars yes)
+echo     (show-selection yes)
+echo     (show-layer-boundary no)
+echo     (show-canvas-boundary no)
+echo     (show-guides no)
+echo     (show-grid no)
+echo     (show-sample-points no))
+echo (default-fullscreen-view
+echo     (show-menubar yes)
+echo     (show-statusbar yes)
+echo     (show-rulers no)
+echo     (show-scrollbars yes)
+echo     (show-selection yes)
+echo     (show-layer-boundary no)
+echo     (show-canvas-boundary no)
+echo     (show-guides no)
+echo     (show-grid no)
+echo     (show-sample-points no))
+echo (toolbox-color-area yes)
+echo (toolbox-foo-area no)
+echo (toolbox-image-area no)
+echo (toolbox-wilber no)
+echo (can-change-accels no)
+echo (save-accels yes)
+echo (restore-accels yes)
+echo (save-session-info no)
+echo (save-tool-options no)
+echo (save-device-status no)
+) > "%GIMP_DIR%\gimprc"
+echo   -^> Done
 
 REM 3. Install stripped shortcuts
 echo [3/6] Installing menurc (strips keyboard shortcuts)...
@@ -138,7 +172,7 @@ echo.
 echo === Installed! Close GIMP completely and reopen. ===
 echo.
 echo After restart you will see:
-echo   - No menubar (right-click canvas for menus)
+echo   - Menubar visible (File, Filters, etc. -- needed to access Spectrace)
 echo   - Only Pencil and Eraser in the toolbox
 echo   - Only Tool Options (left) and Layers (right)
 echo   - No brushes, patterns, fonts, or channels docks
