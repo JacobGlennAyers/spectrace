@@ -535,10 +535,13 @@ class SpectraceBackgroundMonitor(object):
     continuously enforces brush/opacity/dynamics settings so tool
     switches (pencil, eraser, or accidental changes) are corrected."""
 
-    def __init__(self, image, layer_map, layer_colors=None):
+    # FIX 3: Accept root_name so _resolve_layer_path works for any template,
+    # not just the hardcoded orca root group name.
+    def __init__(self, image, layer_map, layer_colors=None, root_name=None):
         self.image = image
         self.layer_map = layer_map
         self.layer_colors = layer_colors if layer_colors is not None else LAYER_COLORS
+        self._root_name = root_name or ROOT_GROUP_NAME  # store active root name
         self.current_layer_name = None
         self._last_tool = None        # track tool switches
         self._eraser_size = 10.0      # remembered eraser brush size
@@ -646,9 +649,14 @@ class SpectraceBackgroundMonitor(object):
         pdb.gimp_displays_flush()
 
     def _resolve_layer_path(self, layer):
-        """Get path-qualified name for a GIMP layer (e.g. 'Heterodynes/5')."""
+        """Get path-qualified name for a GIMP layer (e.g. 'Heterodynes/5').
+
+        FIX 3: Uses self._root_name instead of the hardcoded ROOT_GROUP_NAME
+        constant so that non-orca templates with different root group names
+        resolve layer paths correctly.
+        """
         parent = pdb.gimp_item_get_parent(layer)
-        if parent is not None and parent.name != ROOT_GROUP_NAME:
+        if parent is not None and parent.name != self._root_name:
             # Check if we're dealing with a dynamic root name
             grandparent = pdb.gimp_item_get_parent(parent)
             if grandparent is not None:
@@ -695,6 +703,53 @@ _CALLMARK_SESSION = {
 _CALLMARK_SESSION_FILE = os.path.join(
     os.path.expanduser("~"), ".spectrace", "callmark_session.json"
 )
+
+# ============================================================
+# FIX 1 & 2: PERSISTENT TEMPLATE STATE
+# ============================================================
+# GIMP 2.10 re-executes the entire plugin script in a fresh interpreter
+# process for every menu invocation. Module-level variables like
+# _STATE["template_xcf"] are reset to "" each time, so a template
+# selected during load_wav() is invisible to a subsequent manual call
+# to spectrace_setup() via Filters > Spectrace > Setup Annotation.
+#
+# The fix mirrors the existing CallMark session persistence pattern:
+# save the selected template path to disk in load_wav(), then restore
+# it in spectrace_setup() before falling back to config defaults.
+
+_TEMPLATE_STATE_FILE = os.path.join(
+    os.path.expanduser("~"), ".spectrace", "template_state.json"
+)
+
+
+def _save_template_state(template_xcf):
+    """Persist the selected template path to ~/.spectrace/template_state.json."""
+    try:
+        state_dir = os.path.dirname(_TEMPLATE_STATE_FILE)
+        if not os.path.isdir(state_dir):
+            os.makedirs(state_dir)
+        with open(_TEMPLATE_STATE_FILE, "w") as f:
+            json.dump({"template_xcf": template_xcf}, f)
+        _log("Template state saved: %s" % template_xcf)
+    except Exception as e:
+        _log("Template state save error: %s" % str(e))
+
+
+def _load_template_state():
+    """Restore the selected template path from ~/.spectrace/template_state.json.
+
+    Returns "" if the file does not exist or cannot be read.
+    """
+    try:
+        if os.path.isfile(_TEMPLATE_STATE_FILE):
+            with open(_TEMPLATE_STATE_FILE, "r") as f:
+                data = json.load(f)
+            path = data.get("template_xcf", "")
+            _log("Template state loaded: %s" % path)
+            return path
+    except Exception as e:
+        _log("Template state load error: %s" % str(e))
+    return ""
 
 
 def _save_callmark_session():
@@ -1567,8 +1622,13 @@ def load_wav(filename, raw_filename):
         _log("Import dialog cancelled")
         raise RuntimeError("Import cancelled by user")
 
-    # Store selected template globally so Setup Annotation can use it
-    _STATE["template_xcf"] = import_result.get("template_xcf", "")
+    # FIX 1: Store selected template in _STATE AND persist to disk.
+    # Persisting to disk ensures spectrace_setup() can recover the selection
+    # even when invoked later as a separate plugin process (which resets
+    # all module-level variables including _STATE).
+    template_xcf_selected = import_result.get("template_xcf", "")
+    _STATE["template_xcf"] = template_xcf_selected
+    _save_template_state(template_xcf_selected)
 
     if import_result["mode"] == "callmark":
         _log("CallMark: Excel=%s, individual=%s, cluster=%s" % (
@@ -1877,10 +1937,11 @@ def _apply_setup_to_image(image, template_xcf=""):
         except Exception as e:
             _log("osascript failed: %s" % str(e))
 
-    # Start background monitor
-    _log("Starting background monitor")
+    # FIX 3: Pass use_root to the monitor so _resolve_layer_path uses the
+    # active template's root group name instead of the hardcoded orca constant.
+    _log("Starting background monitor (root_name=%s)" % use_root)
     try:
-        monitor = SpectraceBackgroundMonitor(image, layer_map, use_colors)
+        monitor = SpectraceBackgroundMonitor(image, layer_map, use_colors, root_name=use_root)
         return monitor
     except Exception as e:
         _log("Monitor creation FAILED: %s" % str(e))
@@ -1893,8 +1954,12 @@ def spectrace_setup(image, drawable):
     """
     Main entry point: set up annotation layers and start the background monitor.
 
-    Reads template_xcf from ~/.spectrace/config.json ("default_template_xcf")
-    if configured, otherwise uses the built-in orca template.
+    Template resolution order:
+      1. _STATE["template_xcf"]       — same-process call (e.g. auto-setup)
+      2. _load_template_state()       — cross-process: reads ~/.spectrace/template_state.json
+                                        written by load_wav() in the previous invocation
+      3. config["default_template_xcf"] — permanent default set in config.json
+      4. Built-in orca fallback        — _apply_setup_to_image handles empty string
     """
     _log("=== spectrace_setup called ===" )
 
@@ -1903,11 +1968,17 @@ def spectrace_setup(image, drawable):
     except Exception:
         pass
 
-    # Use template selected in the import dialog, fall back to config
+    # FIX 2: Three-tier template resolution ensures the correct template is
+    # used whether spectrace_setup runs in the same process as load_wav (tier 1)
+    # or as a fresh process via the Filters menu (tier 2 reads from disk).
     template_xcf = _STATE["template_xcf"]
+    if not template_xcf:
+        template_xcf = _load_template_state()       # recover from disk
     if not template_xcf:
         config = load_config()
         template_xcf = config.get("default_template_xcf", "")
+
+    _log("spectrace_setup: resolved template_xcf='%s'" % (template_xcf or "(default orca)"))
 
     monitor = _apply_setup_to_image(image, template_xcf)
 

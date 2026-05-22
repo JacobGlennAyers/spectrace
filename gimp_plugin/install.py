@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -23,6 +24,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SPECTRACE_ROOT = os.path.dirname(SCRIPT_DIR)
 
 CONFIG_FILES = ["gimprc", "menurc", "toolrc", "sessionrc"]
+
+# Marker written into every config we install so we can detect our own files
+# and avoid backing them up over the user's originals.
+SPECTRACE_MARKER = "# Spectrace GIMP configuration"
 
 
 # ── GIMP directory detection ────────────────────────────────────────
@@ -65,6 +70,49 @@ def find_gimp_dir():
     return None
 
 
+# ── File permission helpers ──────────────────────────────────────────
+
+def _make_writable(path):
+    """
+    Remove read-only flag from a file so it can be moved or deleted.
+    Safe to call on files that are already writable.
+    """
+    try:
+        current = os.stat(path).st_mode
+        os.chmod(path, current | stat.S_IWRITE | stat.S_IREAD)
+    except Exception as e:
+        print("  WARNING: could not make %s writable: %s" % (path, e))
+
+
+def _make_readonly(path):
+    """
+    Set a file read-only so GIMP cannot overwrite it on exit.
+    On all platforms this prevents GIMP from saving its state back into
+    the file (GIMP silently skips the write rather than crashing).
+    """
+    try:
+        if platform.system() == "Windows":
+            os.chmod(path, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
+        else:
+            os.chmod(path, 0o444)
+    except Exception as e:
+        print("  WARNING: could not make %s read-only: %s" % (path, e))
+
+
+def _is_spectrace_config(path):
+    """
+    Return True if the file at *path* was written by a previous Spectrace
+    install (identified by SPECTRACE_MARKER in the first 512 bytes).
+    This prevents us from backing up our own config as the 'original'.
+    """
+    try:
+        with open(path, "r", errors="replace") as f:
+            head = f.read(512)
+        return SPECTRACE_MARKER in head
+    except Exception:
+        return False
+
+
 # ── Conda environment detection ─────────────────────────────────────
 
 def find_conda_python():
@@ -74,7 +122,6 @@ def find_conda_python():
     exe = "python.exe" if is_windows else "python"
     subdir = "Scripts" if is_windows else "bin"
 
-    # Check common conda base directories
     if is_windows:
         bases = [
             os.path.join(home, "miniconda3"),
@@ -130,13 +177,22 @@ def install(gimp_dir):
     print("Spectrace root: %s" % SPECTRACE_ROOT)
     print()
 
-    # Back up existing configs (only on first install)
+    # Back up existing configs — but only if they are NOT already one of
+    # ours.  Without this guard a user who ran an old installer would have
+    # a spectrace gimprc (with show-menubar no) as their ".original", and
+    # uninstalling would restore the broken file.
     for f in CONFIG_FILES:
         src = os.path.join(gimp_dir, f)
         backup = src + ".original"
         if os.path.isfile(src) and not os.path.isfile(backup):
-            shutil.copy2(src, backup)
-            print("  Backed up %s -> %s.original" % (f, f))
+            if _is_spectrace_config(src):
+                print("  Skipping backup of %s (already a Spectrace config)" % f)
+            else:
+                # Make sure it's writable before copying (in case a previous
+                # install left it read-only).
+                _make_writable(src)
+                shutil.copy2(src, backup)
+                print("  Backed up %s -> %s.original" % (f, f))
     print()
 
     total_steps = 6
@@ -153,18 +209,98 @@ def install(gimp_dir):
     print("  -> Done")
 
     # 2-5. Install config files
+    # On Windows we write gimprc inline (show-menubar yes) because GTK
+    # right-click context menus don't expose Filters on that platform.
     config_names = {
-        "gimprc": ("gimprc (hides menubar, rulers)", 2),
-        "menurc": ("menurc (strips keyboard shortcuts)", 3),
-        "toolrc": ("toolrc (pencil + eraser only)", 4),
-        "sessionrc": ("sessionrc (minimal dock layout)", 5),
+        "menurc":    ("menurc (strips keyboard shortcuts)", 3),
+        "toolrc":    ("toolrc (pencil + eraser only)",      4),
+        "sessionrc": ("sessionrc (minimal dock layout)",    5),
     }
     config_dir = os.path.join(SCRIPT_DIR, "config")
+
+    # Step 2: gimprc — platform-specific handling
+    print("[2/%d] Installing gimprc..." % total_steps)
+    gimprc_dst = os.path.join(gimp_dir, "gimprc")
+
+    # Always make writable before writing (handles the read-only-from-
+    # previous-install case so we don't get a PermissionError).
+    if os.path.isfile(gimprc_dst):
+        _make_writable(gimprc_dst)
+
+    if platform.system() == "Windows":
+        # Windows needs show-menubar yes — write inline
+        windows_gimprc = (
+            SPECTRACE_MARKER + " (Windows)\n"
+            "(default-view\n"
+            "    (show-menubar yes)\n"
+            "    (show-statusbar yes)\n"
+            "    (show-rulers no)\n"
+            "    (show-scrollbars yes)\n"
+            "    (show-selection yes)\n"
+            "    (show-layer-boundary no)\n"
+            "    (show-canvas-boundary no)\n"
+            "    (show-guides no)\n"
+            "    (show-grid no)\n"
+            "    (show-sample-points no))\n"
+            "(default-fullscreen-view\n"
+            "    (show-menubar yes)\n"
+            "    (show-statusbar yes)\n"
+            "    (show-rulers no)\n"
+            "    (show-scrollbars yes)\n"
+            "    (show-selection yes)\n"
+            "    (show-layer-boundary no)\n"
+            "    (show-canvas-boundary no)\n"
+            "    (show-guides no)\n"
+            "    (show-grid no)\n"
+            "    (show-sample-points no))\n"
+            "(toolbox-color-area yes)\n"
+            "(toolbox-foo-area no)\n"
+            "(toolbox-image-area no)\n"
+            "(toolbox-wilber no)\n"
+            "(can-change-accels no)\n"
+            "(save-accels yes)\n"
+            "(restore-accels yes)\n"
+            "(save-session-info no)\n"
+            "(save-tool-options no)\n"
+            "(save-device-status no)\n"
+        )
+        with open(gimprc_dst, "w") as f:
+            f.write(windows_gimprc)
+    else:
+        # Mac / Linux: copy from config/gimprc (show-menubar no is fine
+        # because right-click canvas exposes the Filters menu there)
+        gimprc_src = os.path.join(config_dir, "gimprc")
+        if os.path.isfile(gimprc_src):
+            # Prepend the marker so _is_spectrace_config() detects it
+            with open(gimprc_src, "r") as f:
+                content = f.read()
+            if SPECTRACE_MARKER not in content:
+                content = SPECTRACE_MARKER + "\n" + content
+            with open(gimprc_dst, "w") as f:
+                f.write(content)
+        else:
+            print("  -> Skipped (config/gimprc not found)")
+            gimprc_dst = None  # don't try to lock a file we didn't write
+
+    # Lock gimprc read-only so GIMP cannot overwrite it on exit.
+    # This is the key fix: GIMP saves its state (including show-menubar)
+    # on shutdown. Making the file read-only causes GIMP to silently skip
+    # that write, preserving our settings across restarts.
+    if gimprc_dst and os.path.isfile(gimprc_dst):
+        _make_readonly(gimprc_dst)
+        print("  -> Done (locked read-only to prevent GIMP overwrite)")
+    else:
+        print("  -> Done")
+
+    # Steps 3-5: remaining config files
     for fname, (desc, step) in config_names.items():
         print("[%d/%d] Installing %s..." % (step, total_steps, desc))
         src = os.path.join(config_dir, fname)
+        dst = os.path.join(gimp_dir, fname)
         if os.path.isfile(src):
-            shutil.copy2(src, os.path.join(gimp_dir, fname))
+            if os.path.isfile(dst):
+                _make_writable(dst)
+            shutil.copy2(src, dst)
             print("  -> Done")
         else:
             print("  -> Skipped (not found)")
@@ -190,7 +326,6 @@ def install(gimp_dir):
     config_file = os.path.join(config_dir_path, "config.json")
     os.makedirs(config_dir_path, exist_ok=True)
 
-    # Merge with existing config if present
     config = {}
     if os.path.isfile(config_file):
         print("  Config already exists, updating spectrace_root and python3_path...")
@@ -216,8 +351,12 @@ def install(gimp_dir):
     print()
     print("=== Installed! Close GIMP completely and reopen. ===")
     print()
-    print("After restart you will see:")
-    print("  - No menubar (right-click canvas for menus)")
+    if platform.system() == "Windows":
+        print("After restart you will see:")
+        print("  - Menubar visible (File, Filters, etc.)")
+    else:
+        print("After restart you will see:")
+        print("  - No menubar (right-click canvas for menus)")
     print("  - Only Pencil and Eraser in the toolbox")
     print("  - Only Tool Options (left) and Layers (right)")
     print("  - No brushes, patterns, fonts, or channels docks")
@@ -225,8 +364,6 @@ def install(gimp_dir):
     print("New features:")
     print("  - File > Open > select a .wav file -> opens as spectrogram")
     print("  - Filters > Spectrace > Setup Annotation -> pick a template .xcf")
-    print()
-    print("Usage: right-click canvas > Filters > Spectrace > Setup Annotation...")
     print()
     print("To uninstall: python %s --uninstall" % os.path.abspath(__file__))
 
@@ -245,11 +382,17 @@ def uninstall(gimp_dir):
     else:
         print("[1/5] Plugin not found (skipped)")
 
-    # Restore config files
+    # Restore config files.
+    # Must make each file writable first in case the installer locked it.
     step = 2
     for f in CONFIG_FILES:
         src = os.path.join(gimp_dir, f)
         backup = src + ".original"
+
+        # Unlock before touching
+        if os.path.isfile(src):
+            _make_writable(src)
+
         if os.path.isfile(backup):
             shutil.move(backup, src)
             print("[%d/5] Restored original %s" % (step, f))
@@ -276,7 +419,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Allow GIMP_DIR env var override
     gimp_dir = os.environ.get("GIMP_DIR") or find_gimp_dir()
 
     if not gimp_dir:
