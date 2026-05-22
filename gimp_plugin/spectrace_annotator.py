@@ -37,7 +37,13 @@ import colorsys
 # ============================================================
 
 _DEBUG = True
-_LOG_PATH = "/tmp/spectrace_debug.log"
+# Use a writable log path on all platforms.
+# Windows does not have /tmp; use %TEMP% or fall back to user home.
+if sys.platform == "win32":
+    _LOG_PATH = os.path.join(os.environ.get("TEMP", os.path.expanduser("~")),
+                             "spectrace_debug.log")
+else:
+    _LOG_PATH = "/tmp/spectrace_debug.log"
 
 def _log(msg):
     if not _DEBUG:
@@ -103,13 +109,28 @@ def find_python3():
         "/opt/miniforge3",
         "/usr/local/miniconda3",
     ]
+    # Windows also installs conda under C:\ or ProgramData
+    if sys.platform == "win32":
+        conda_dirs += [
+            r"C:\miniconda3",
+            r"C:\anaconda3",
+            r"C:\ProgramData\miniconda3",
+            r"C:\ProgramData\anaconda3",
+        ]
+
     for conda_dir in conda_dirs:
+        # Windows: envs\spectrace\python.exe  (no bin\ subdirectory)
+        if sys.platform == "win32":
+            win_p = os.path.join(conda_dir, "envs", "spectrace", "python.exe")
+            if os.path.isfile(win_p):
+                return win_p
+        # Unix: envs/spectrace/bin/python
         p = os.path.join(conda_dir, "envs", "spectrace", "bin", "python")
         if os.path.isfile(p):
             return p
 
-    # 3. Fallback
-    return "python3"
+    # 3. Fallback — "python" is the right name on Windows; "python3" on Unix
+    return "python" if sys.platform == "win32" else "python3"
 
 
 def find_spectrace_root():
@@ -761,8 +782,10 @@ def _build_clean_env(python3):
                 "PYTHONSTARTUP", "PYTHONCASEOK"]:
         clean_env.pop(key, None)
     conda_bin = os.path.dirname(python3)
+    # Windows PATH entries are separated by ';', Unix uses ':'
+    path_sep = ";" if sys.platform == "win32" else ":"
     if conda_bin not in clean_env.get("PATH", ""):
-        clean_env["PATH"] = conda_bin + ":" + clean_env.get("PATH", "")
+        clean_env["PATH"] = conda_bin + path_sep + clean_env.get("PATH", "")
     return clean_env
 
 
@@ -1676,7 +1699,54 @@ def load_wav(filename, raw_filename):
         pass
 
     _log("WAV loaded successfully as spectrogram: %s" % png_path)
+
+    # Auto-run annotation setup so the user never needs to manually trigger
+    # Filters > Spectrace > Setup Annotation.  This is especially important
+    # on Windows where the menubar may be hidden by the installed gimprc.
+    template_xcf = _STATE.get("template_xcf", "")
+    _log("Auto-running annotation setup (template=%s)" % (template_xcf or "(default)"))
+    gobject.idle_add(_deferred_setup, img, template_xcf)
+
     return img
+
+
+def _deferred_setup(image, template_xcf):
+    """
+    Run annotation layer setup after load_wav returns.
+
+    Called via gobject.idle_add so GIMP has finished registering the new
+    image and display before we try to insert layers into it.  Returning
+    False tells GLib not to repeat the call.
+    """
+    _log("_deferred_setup firing for image %s" % str(image))
+    try:
+        monitor = _apply_setup_to_image(image, template_xcf)
+        if monitor is None:
+            _log("_deferred_setup: _apply_setup_to_image returned None")
+            return False
+
+        # Start gtk.main() to keep the gobject timer alive, same as
+        # spectrace_setup() does when triggered from the menu.
+        if _STATE["gtk_window"] is None:
+            _log("_deferred_setup: entering gtk.main() with hidden window")
+            win = gtk.Window(gtk.WINDOW_TOPLEVEL)
+            win.set_title("Spectrace")
+            win.set_decorated(False)
+            win.set_skip_taskbar_hint(True)
+            win.set_default_size(1, 1)
+            win.move(-1, -1)
+            win.connect("delete-event", lambda w, e: gtk.main_quit() or True)
+            win.show()
+            _STATE["gtk_window"] = win
+            gtk.main()
+            _log("_deferred_setup: gtk.main() returned")
+        else:
+            _log("_deferred_setup: gtk.main() already running")
+    except Exception as e:
+        _log("_deferred_setup error: %s" % str(e))
+        import traceback
+        _log(traceback.format_exc())
+    return False
 
 
 def _create_layers_only(image, template_xcf=""):
@@ -1691,7 +1761,8 @@ def _create_layers_only(image, template_xcf=""):
 
     if template_xcf and os.path.isfile(template_xcf):
         try:
-            template_img = pdb.gimp_file_load(template_xcf, template_xcf)
+            # Use gimp_xcf_load to avoid reentrancy (see _apply_setup_to_image)
+            template_img = pdb.gimp_xcf_load(0, template_xcf, template_xcf)
             root_name, dyn_structure, dyn_sections, layer_names = \
                 extract_template_structure(template_img)
             pdb.gimp_image_delete(template_img)
@@ -1741,7 +1812,11 @@ def _apply_setup_to_image(image, template_xcf=""):
     if template_xcf and os.path.isfile(template_xcf):
         _log("Loading template XCF: %s" % template_xcf)
         try:
-            template_img = pdb.gimp_file_load(template_xcf, template_xcf)
+            # Use gimp_xcf_load instead of gimp_file_load to avoid triggering
+            # the file-load handler dispatch, which causes reentrancy failures
+            # in GIMP 2.10 (especially on Windows) when called from within an
+            # existing load handler.
+            template_img = pdb.gimp_xcf_load(0, template_xcf, template_xcf)
 
             root_name, dyn_structure, dyn_sections, layer_names = \
                 extract_template_structure(template_img)
