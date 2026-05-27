@@ -267,11 +267,7 @@ The subfolder name reflects the active filters (e.g., `R3277`, `vocal`, or `R327
 
 ## Convert to HDF5 Format
 
-For ML pipelines, convert XCF annotations to HDF5:
-
-```bash
-python xcf_to_hdf5.py
-```
+To build a more flexible file format for the annotations, convert XCF annotations to HDF5:
 
 Edit `xcf_to_hdf5.py` to set paths:
 
@@ -279,6 +275,13 @@ Edit `xcf_to_hdf5.py` to set paths:
 project_folder = "./projects"
 ml_data_folder = "./hdf5_files"
 ```
+
+then run:
+
+```bash
+python xcf_to_hdf5.py
+```
+
 
 This creates one HDF5 file **per audio clip** (consolidating all annotation passes) plus `dataset_index.csv`.
 
@@ -317,17 +320,20 @@ with HDF5SpectrogramLoader("hdf5_files/orca_0.hdf5") as loader:
 
 Convert annotations to Excel spreadsheets:
 
-```bash
-python export_contours_to_excel.py
-```
-
 Edit `export_contours_to_excel.py` to configure:
 
 ```python
 ml_data_folder = "./hdf5_files"
 output_excel = "whale_contours_export.xlsx"
-contour_method = "centroid"  # or "min_max" or "all_points"
+contour_method = "all_points"  # or "min_max" or "centroid"
 ```
+
+then run:
+
+```bash
+python export_contours_to_excel.py
+```
+
 
 The Excel file contains:
 - **Summary**: Overview of all samples
