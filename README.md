@@ -186,7 +186,7 @@ The plugin automatically:
 
 1. `File > Save As...` (first time) or `Ctrl+S` (subsequent saves)
 2. Save the XCF file in your project folder: `projects/your_audio_file_0/your_audio_file_0.xcf`
-3. The XCF filename should match the project folder name
+3. The XCF filename needs to be changed to match the project folder name
 
 ---
 
