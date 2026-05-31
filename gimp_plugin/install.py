@@ -29,6 +29,46 @@ CONFIG_FILES = ["gimprc", "menurc", "toolrc", "sessionrc"]
 # and avoid backing them up over the user's originals.
 SPECTRACE_MARKER = "# Spectrace GIMP configuration"
 
+# gimprc content for platforms where the menubar must stay visible.
+# config/gimprc uses show-menubar no (macOS only — right-click canvas works
+# there).  Windows and Linux both need show-menubar yes because GTK
+# right-click context menus do not reliably expose the Filters menu.
+_GIMPRC_MENUBAR_YES = """\
+{marker}
+(default-view
+    (show-menubar yes)
+    (show-statusbar yes)
+    (show-rulers no)
+    (show-scrollbars yes)
+    (show-selection yes)
+    (show-layer-boundary no)
+    (show-canvas-boundary no)
+    (show-guides no)
+    (show-grid no)
+    (show-sample-points no))
+(default-fullscreen-view
+    (show-menubar yes)
+    (show-statusbar yes)
+    (show-rulers no)
+    (show-scrollbars yes)
+    (show-selection yes)
+    (show-layer-boundary no)
+    (show-canvas-boundary no)
+    (show-guides no)
+    (show-grid no)
+    (show-sample-points no))
+(toolbox-color-area yes)
+(toolbox-foo-area no)
+(toolbox-image-area no)
+(toolbox-wilber no)
+(can-change-accels no)
+(save-accels yes)
+(restore-accels yes)
+(save-session-info no)
+(save-tool-options no)
+(save-device-status no)
+"""
+
 
 # ── GIMP directory detection ────────────────────────────────────────
 
@@ -177,6 +217,8 @@ def install(gimp_dir):
     print("Spectrace root: %s" % SPECTRACE_ROOT)
     print()
 
+    system = platform.system()
+
     # Back up existing configs — but only if they are NOT already one of
     # ours.  Without this guard a user who ran an old installer would have
     # a spectrace gimprc (with show-menubar no) as their ".original", and
@@ -208,70 +250,27 @@ def install(gimp_dir):
         os.chmod(plugin_dst, 0o755)
     print("  -> Done")
 
-    # 2-5. Install config files
-    # On Windows we write gimprc inline (show-menubar yes) because GTK
-    # right-click context menus don't expose Filters on that platform.
-    config_names = {
-        "menurc":    ("menurc (strips keyboard shortcuts)", 3),
-        "toolrc":    ("toolrc (pencil + eraser only)",      4),
-        "sessionrc": ("sessionrc (minimal dock layout)",    5),
-    }
-    config_dir = os.path.join(SCRIPT_DIR, "config")
-
-    # Step 2: gimprc — platform-specific handling
+    # 2. Install gimprc — platform-specific.
+    #
+    # macOS:          copy config/gimprc as-is (show-menubar no is correct;
+    #                 right-click canvas exposes Filters there).
+    # Windows/Linux:  write inline with show-menubar yes.  GTK right-click
+    #                 context menus on these platforms do not reliably expose
+    #                 the Filters menu, so the menubar must stay visible.
+    #
+    # On all platforms, lock the file read-only afterwards so GIMP cannot
+    # overwrite it on exit (GIMP saves show-menubar state on shutdown).
     print("[2/%d] Installing gimprc..." % total_steps)
     gimprc_dst = os.path.join(gimp_dir, "gimprc")
 
-    # Always make writable before writing (handles the read-only-from-
-    # previous-install case so we don't get a PermissionError).
     if os.path.isfile(gimprc_dst):
         _make_writable(gimprc_dst)
 
-    if platform.system() == "Windows":
-        # Windows needs show-menubar yes — write inline
-        windows_gimprc = (
-            SPECTRACE_MARKER + " (Windows)\n"
-            "(default-view\n"
-            "    (show-menubar yes)\n"
-            "    (show-statusbar yes)\n"
-            "    (show-rulers no)\n"
-            "    (show-scrollbars yes)\n"
-            "    (show-selection yes)\n"
-            "    (show-layer-boundary no)\n"
-            "    (show-canvas-boundary no)\n"
-            "    (show-guides no)\n"
-            "    (show-grid no)\n"
-            "    (show-sample-points no))\n"
-            "(default-fullscreen-view\n"
-            "    (show-menubar yes)\n"
-            "    (show-statusbar yes)\n"
-            "    (show-rulers no)\n"
-            "    (show-scrollbars yes)\n"
-            "    (show-selection yes)\n"
-            "    (show-layer-boundary no)\n"
-            "    (show-canvas-boundary no)\n"
-            "    (show-guides no)\n"
-            "    (show-grid no)\n"
-            "    (show-sample-points no))\n"
-            "(toolbox-color-area yes)\n"
-            "(toolbox-foo-area no)\n"
-            "(toolbox-image-area no)\n"
-            "(toolbox-wilber no)\n"
-            "(can-change-accels no)\n"
-            "(save-accels yes)\n"
-            "(restore-accels yes)\n"
-            "(save-session-info no)\n"
-            "(save-tool-options no)\n"
-            "(save-device-status no)\n"
-        )
-        with open(gimprc_dst, "w") as f:
-            f.write(windows_gimprc)
-    else:
-        # Mac / Linux: copy from config/gimprc (show-menubar no is fine
-        # because right-click canvas exposes the Filters menu there)
+    if system == "Darwin":
+        # macOS: copy from config/gimprc (show-menubar no)
+        config_dir = os.path.join(SCRIPT_DIR, "config")
         gimprc_src = os.path.join(config_dir, "gimprc")
         if os.path.isfile(gimprc_src):
-            # Prepend the marker so _is_spectrace_config() detects it
             with open(gimprc_src, "r") as f:
                 content = f.read()
             if SPECTRACE_MARKER not in content:
@@ -280,12 +279,16 @@ def install(gimp_dir):
                 f.write(content)
         else:
             print("  -> Skipped (config/gimprc not found)")
-            gimprc_dst = None  # don't try to lock a file we didn't write
+            gimprc_dst = None
+    else:
+        # Windows and Linux: write inline with show-menubar yes
+        platform_label = "Windows" if system == "Windows" else "Linux"
+        content = _GIMPRC_MENUBAR_YES.format(
+            marker="%s (%s)" % (SPECTRACE_MARKER, platform_label)
+        )
+        with open(gimprc_dst, "w") as f:
+            f.write(content)
 
-    # Lock gimprc read-only so GIMP cannot overwrite it on exit.
-    # This is the key fix: GIMP saves its state (including show-menubar)
-    # on shutdown. Making the file read-only causes GIMP to silently skip
-    # that write, preserving our settings across restarts.
     if gimprc_dst and os.path.isfile(gimprc_dst):
         _make_readonly(gimprc_dst)
         print("  -> Done (locked read-only to prevent GIMP overwrite)")
@@ -293,6 +296,12 @@ def install(gimp_dir):
         print("  -> Done")
 
     # Steps 3-5: remaining config files
+    config_dir = os.path.join(SCRIPT_DIR, "config")
+    config_names = {
+        "menurc":    ("menurc (strips keyboard shortcuts)", 3),
+        "toolrc":    ("toolrc (pencil + eraser only)",      4),
+        "sessionrc": ("sessionrc (minimal dock layout)",    5),
+    }
     for fname, (desc, step) in config_names.items():
         print("[%d/%d] Installing %s..." % (step, total_steps, desc))
         src = os.path.join(config_dir, fname)
@@ -351,12 +360,12 @@ def install(gimp_dir):
     print()
     print("=== Installed! Close GIMP completely and reopen. ===")
     print()
-    if platform.system() == "Windows":
-        print("After restart you will see:")
-        print("  - Menubar visible (File, Filters, etc.)")
-    else:
+    if system == "Darwin":
         print("After restart you will see:")
         print("  - No menubar (right-click canvas for menus)")
+    else:
+        print("After restart you will see:")
+        print("  - Menubar visible (File, Filters, etc.)")
     print("  - Only Pencil and Eraser in the toolbox")
     print("  - Only Tool Options (left) and Layers (right)")
     print("  - No brushes, patterns, fonts, or channels docks")

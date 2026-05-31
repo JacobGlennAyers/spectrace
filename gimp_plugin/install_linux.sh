@@ -35,9 +35,11 @@ echo "GIMP config:    $GIMP_DIR"
 echo "Spectrace root: $SPECTRACE_ROOT"
 echo ""
 
-# Back up ALL config files we'll replace (only on first install)
+# Back up ALL config files we'll replace (only on first install).
+# Make each writable first in case a previous install locked it read-only.
 for f in gimprc menurc toolrc sessionrc; do
     if [ -f "$GIMP_DIR/$f" ] && [ ! -f "$GIMP_DIR/$f.original" ]; then
+        chmod u+w "$GIMP_DIR/$f" 2>/dev/null || true
         cp "$GIMP_DIR/$f" "$GIMP_DIR/$f.original"
         echo "  Backed up $f -> $f.original"
     fi
@@ -52,13 +54,50 @@ chmod +x "$GIMP_DIR/plug-ins/spectrace_annotator.py"
 echo "  -> Done"
 
 # 2. Install gimprc
-echo "[2/6] Installing gimprc (hides menubar, rulers)..."
-if [ -f "$SCRIPT_DIR/config/gimprc" ]; then
-    cp "$SCRIPT_DIR/config/gimprc" "$GIMP_DIR/"
-    echo "  -> Done"
-else
-    echo "  -> Skipped (no gimprc found)"
-fi
+# Linux needs show-menubar YES (same as Windows): GTK right-click context
+# menus do not reliably expose Filters, so the menubar must stay visible.
+# config/gimprc uses show-menubar no (for macOS only), so we write inline
+# here rather than copying that file.
+# Lock read-only afterwards so GIMP cannot overwrite it on exit.
+echo "[2/6] Installing gimprc (keeps menubar, hides rulers)..."
+chmod u+w "$GIMP_DIR/gimprc" 2>/dev/null || true
+cat > "$GIMP_DIR/gimprc" << 'EOFGIMPRC'
+# Spectrace GIMP configuration (Linux)
+(default-view
+    (show-menubar yes)
+    (show-statusbar yes)
+    (show-rulers no)
+    (show-scrollbars yes)
+    (show-selection yes)
+    (show-layer-boundary no)
+    (show-canvas-boundary no)
+    (show-guides no)
+    (show-grid no)
+    (show-sample-points no))
+(default-fullscreen-view
+    (show-menubar yes)
+    (show-statusbar yes)
+    (show-rulers no)
+    (show-scrollbars yes)
+    (show-selection yes)
+    (show-layer-boundary no)
+    (show-canvas-boundary no)
+    (show-guides no)
+    (show-grid no)
+    (show-sample-points no))
+(toolbox-color-area yes)
+(toolbox-foo-area no)
+(toolbox-image-area no)
+(toolbox-wilber no)
+(can-change-accels no)
+(save-accels yes)
+(restore-accels yes)
+(save-session-info no)
+(save-tool-options no)
+(save-device-status no)
+EOFGIMPRC
+chmod 444 "$GIMP_DIR/gimprc"
+echo "  -> Done (locked read-only to prevent GIMP overwrite)"
 
 # 3. Install stripped shortcuts
 echo "[3/6] Installing menurc (strips keyboard shortcuts)..."
@@ -168,7 +207,7 @@ echo ""
 echo "=== Installed! Close GIMP completely and reopen. ==="
 echo ""
 echo "After restart you will see:"
-echo "  - No menubar (right-click canvas for menus)"
+echo "  - Menubar visible (File, Filters, etc. -- use Filters > Spectrace)"
 echo "  - Only Pencil and Eraser in the toolbox"
 echo "  - Only Tool Options (left) and Layers (right)"
 echo "  - No brushes, patterns, fonts, or channels docks"
