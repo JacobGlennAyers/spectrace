@@ -33,7 +33,7 @@ This tool is particularly useful for creating training datasets for machine lear
 
 ### Step 1: Clone the Repository and Create the Conda Environment
 
-You must have first installed [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install/overview) and [Git]([https://git-scm.com/install/) on your system.
+You must have first installed [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install/overview) and [Git](https://git-scm.com/install/) on your system.
 
 Navigate to the folder you want the spectrace folder to exist in via a terminal with conda configured - 
 
