@@ -31,40 +31,11 @@ This tool is particularly useful for creating training datasets for machine lear
 
 ## Installation
 
-### Step 1: Install GIMP 2.10
+### Step 1: Clone the Repository and Create the Conda Environment
 
-> **IMPORTANT:** You must install GIMP version **2.10.x** — not GIMP 3.0 or later. The `gimpformats` Python library and the Spectrace plugin both require GIMP 2.10. **Do not install 3.0**
+You must have first installed [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install/overview) and [Git](https://git-scm.com/install/) on your system.
 
-
-**macOS:**
-
-Download the `.dmg` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version). Alternatively:
-
-```bash
-brew install gimp@2.10
-```
-
-**Windows:**
-
-1. Download `gimp-2.10.30-setup.exe` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version)
-2. Run the installer and accept default settings
-
-**Linux (Ubuntu/Debian):**
-
-```bash
-sudo apt update && sudo apt install gimp=2.10.*
-```
-
-If GIMP 2.10 is not in your distribution's repositories, use Flatpak:
-
-```bash
-flatpak install flathub org.gimp.GIMP//2.10
-flatpak run org.gimp.GIMP//2.10
-```
-
-**After installing, launch GIMP once and then close it.** This creates the configuration directory that the Spectrace installer needs.
-
-### Step 2: Clone the Repository and Create the Conda Environment
+Navigate to the folder you want the spectrace folder to exist in via a terminal with conda configured - 
 
 ```bash
 git clone https://github.com/JacobGlennAyers/spectrace.git
@@ -86,6 +57,34 @@ This installs all Python dependencies:
 | openpyxl | Excel export |
 | scikit-learn | ML utilities |
 
+### Step 2: Install GIMP 2.10.x
+
+> **IMPORTANT:** You must install GIMP version **2.10.x** — not GIMP 3.0 or later. The `gimpformats` Python library and the Spectrace plugin both require GIMP 2.10. **Do not install 3.0**
+
+
+**macOS:**
+
+Download the `.dmg` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version). 
+
+Double click on the .dmg file in downloads and follow the macOS instructions.
+
+**Windows:**
+
+1. Download `gimp-2.10.30-setup.exe` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version)
+2. Run the installer and accept default settings
+
+**Linux (Ubuntu/Debian):**
+
+Running - 
+```bash
+bash install-gimp-linux.sh
+```
+will automatically add GIMP 2.10.38 to your Applications and create a Desktop Icon. 
+
+
+**After installing, launch GIMP once and then close it.** This creates the configuration directory that the Spectrace installer needs.
+
+
 ### Step 3: Install the Spectrace GIMP Plugin
 
 Run the installer (works on macOS, Linux, and Windows):
@@ -100,7 +99,6 @@ The installer automatically:
 3. Detects your conda `spectrace` environment and writes the path to `~/.spectrace/config.json`
 4. Backs up your original GIMP configuration (restored when you uninstall)
 
-> **Note:** The Linux installer auto-detects both standard (`~/.config/GIMP/2.10`) and Flatpak GIMP installations.
 
 ### Step 4: Verify the Installation
 
