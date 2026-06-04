@@ -115,7 +115,7 @@ def test_hdf5_metadata_values_sensible(hdf5_path):
         assert int(m["nfft"])        == 2048,    f"Unexpected nfft in {hdf5_path.name}"
         assert int(m["noverlap"])    == 1024,    f"Unexpected noverlap in {hdf5_path.name}"
         assert int(m["sample_rate"]) in {102_400, 100_000} ,  f"Unexpected sample_rate in {hdf5_path.name}"
-        assert float(m["max_freq_hz"]) == 51200.0
+        assert float(m["max_freq_hz"]) in {51200.0, 50000.0}
         assert float(m["duration_sec"]) > 0
 
 @pytest.mark.parametrize("hdf5_path", hdf5_files, ids=[f.stem for f in hdf5_files])
