@@ -1,0 +1,33 @@
+{
+  "color_mapping": {
+    "Cetacean_AdditionalContours": "#e62e2e",
+    "Cetacean_AdditionalContours/f0_CetaceanAdditionalContours": "#e6572e",
+    "Cetacean_AdditionalContours/harmonics_CetaceanAdditionalContours": "#e6802e",
+    "Cetacean_AdditionalContours/unsure_CetaceanAdditionalContours": "#e6a82e",
+    "Heterodynes/0": "#e6d12e",
+    "Heterodynes/1": "#d1e62e",
+    "Heterodynes/10": "#a8e62e",
+    "Heterodynes/11": "#80e62e",
+    "Heterodynes/12": "#57e62e",
+    "Heterodynes/2": "#2ee62e",
+    "Heterodynes/3": "#2ee657",
+    "Heterodynes/4": "#2ee67f",
+    "Heterodynes/5": "#2ee6a8",
+    "Heterodynes/6": "#2ee6d1",
+    "Heterodynes/7": "#2ed1e6",
+    "Heterodynes/8": "#2ea8e6",
+    "Heterodynes/9": "#2e80e6",
+    "Heterodynes/unsure": "#2e57e6",
+    "Subharmonics/subharmonics_HFC": "#2e2ee6",
+    "Subharmonics/subharmonics_LFC": "#572ee6",
+    "f0_HFC": "#802ee6",
+    "f0_LFC": "#a82ee6",
+    "harmonics_HFC": "#d12ee6",
+    "harmonics_LFC": "#e62ed1",
+    "heterodyne_or_subharmonic_or_other": "#e62ea8",
+    "unsure_HFC": "#e62e80",
+    "unsure_LFC": "#e62e57"
+  },
+  "last_updated": "2026-02-11T18:17:17.038552",
+  "template_source": "auto-discovered"
+}

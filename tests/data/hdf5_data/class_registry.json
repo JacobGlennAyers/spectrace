@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "classes": [
+    {
+      "name": "Cetacean_AdditionalContours/f0_CetaceanAdditionalContours",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Cetacean_AdditionalContours/harmonics_CetaceanAdditionalContours",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Cetacean_AdditionalContours/unsure_CetaceanAdditionalContours",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/0",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/1",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/10",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/11",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/12",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/2",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/3",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/4",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/5",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/6",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/7",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/8",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/9",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Heterodynes/unsure",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Subharmonics/subharmonics_HFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "Subharmonics/subharmonics_LFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "f0_HFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "f0_LFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "harmonics_HFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "harmonics_LFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "heterodyne_or_subharmonic_or_other",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "unsure_HFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    },
+    {
+      "name": "unsure_LFC",
+      "added_version": 1,
+      "added_date": "2026-02-18"
+    }
+  ]
+}
