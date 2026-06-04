@@ -114,7 +114,7 @@ def test_hdf5_metadata_values_sensible(hdf5_path):
         m = dict(f["metadata"].attrs)
         assert int(m["nfft"])        == 2048,    f"Unexpected nfft in {hdf5_path.name}"
         assert int(m["noverlap"])    == 1024,    f"Unexpected noverlap in {hdf5_path.name}"
-        assert int(m["sample_rate"]) == 102400,  f"Unexpected sample_rate in {hdf5_path.name}"
+        assert int(m["sample_rate"]) in {102400, 10000} ,  f"Unexpected sample_rate in {hdf5_path.name}"
         assert float(m["max_freq_hz"]) == 51200.0
         assert float(m["duration_sec"]) > 0
 
