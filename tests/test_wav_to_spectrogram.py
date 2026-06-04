@@ -15,7 +15,6 @@ NFFT     = 2048
 NOVERLAP = 1024
 
 @pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
-@pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
 def test_spectrogram_png_exists(wav_path, tmp_path):
     audio_dict = {
         "clip_path": str(wav_path),
