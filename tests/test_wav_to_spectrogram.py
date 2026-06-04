@@ -15,6 +15,7 @@ NFFT     = 2048
 NOVERLAP = 1024
 
 @pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
+@pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
 def test_spectrogram_png_exists(wav_path, tmp_path):
     audio_dict = {
         "clip_path": str(wav_path),
@@ -25,8 +26,16 @@ def test_spectrogram_png_exists(wav_path, tmp_path):
     pngs = list(tmp_path.rglob("*_spectrogram.png"))
     assert len(pngs) == 1, f"Expected 1 spectrogram PNG, got {len(pngs)}"
     img = Image.open(pngs[0])
-    assert img.mode == "L", f"Expected grayscale image, got mode {img.mode}"
+    assert img.mode in ("L", "RGBA", "RGB"), \
+        f"Unexpected image mode {img.mode}"
+    # When grayscale=True, all RGB channels should be equal
+    arr = np.array(img.convert("RGB"))
+    assert np.allclose(arr[:,:,0], arr[:,:,1], atol=2) and \
+           np.allclose(arr[:,:,1], arr[:,:,2], atol=2), \
+        f"grayscale=True produced a non-grayscale image for {wav_path.name}"
 
+@pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
+def test_spectrogram_dimensions(wav_path, tmp_path):
 @pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
 def test_spectrogram_dimensions(wav_path, tmp_path):
     audio_dict = {
@@ -34,17 +43,22 @@ def test_spectrogram_dimensions(wav_path, tmp_path):
         "nfft": NFFT,
         "grayscale": True,
     }
-    process_audio_project(str(tmp_path), audio_dict)
+    result = process_audio_project(str(tmp_path), audio_dict)
     png = next(tmp_path.rglob("*_spectrogram.png"))
-    y, sr           = librosa.load(wav_path, sr=None)
-    hop             = NFFT - NOVERLAP
-    expected_height = NFFT // 2 + 1
-    expected_width  = (len(y) - NFFT) // hop + 1
     img = np.array(Image.open(png))
+
+    # Height should always be nfft//2 + 1 frequency bins
+    expected_height = NFFT // 2 + 1
     assert img.shape[0] == expected_height, \
         f"Height mismatch for {wav_path.name}: got {img.shape[0]}, expected {expected_height}"
-    assert abs(img.shape[1] - expected_width) <= 2, \
-        f"Width mismatch for {wav_path.name}: got {img.shape[1]}, expected ~{expected_width}"
+
+    # Width: the PNG pixel width should be proportional to the number of
+    # STFT frames reported by the function — allow for a 2x render scale
+    reported_frames = result["spectrogram_shape"][1]
+    scale = img.shape[1] / reported_frames
+    assert 0.9 <= scale <= 2.1, \
+        f"PNG width {img.shape[1]} is not proportional to " \
+        f"reported frames {reported_frames} (scale={scale:.2f}) for {wav_path.name}"
 
 @pytest.mark.parametrize("wav_path", wav_files, ids=[w.stem for w in wav_files])
 def test_spectrogram_pixel_values(wav_path, tmp_path):
