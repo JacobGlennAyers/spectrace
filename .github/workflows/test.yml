@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    env:
+      MPLBACKEND: Agg
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
