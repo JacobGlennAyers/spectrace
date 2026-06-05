@@ -1,18 +1,17 @@
 name: spectrace
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.11.10
-  - numpy=1.26.4
+  - python=3.11
   - pandas
   - matplotlib
-  - librosa=0.10.2.post1
+  - librosa
   - h5py
   - pillow
   - openpyxl
-  - scikit-learn=1.5.2
-  - scipy=1.14.1
+  - scikit-learn
+  - scipy
+  - numpy
   - pytest
   - pip:
       - gimpformats
