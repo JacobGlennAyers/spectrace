@@ -1,0 +1,48 @@
+name: Tests
+on:
+  push:
+    branches: [main, unit-tests]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    env:
+      MPLBACKEND: Agg
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+    steps:
+      - name: Checkout code (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache LFS objects
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.gitattributes') }}
+          restore-keys: lfs-
+
+      - name: Set up conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: spectrace
+          auto-activate-base: false
+          miniforge-version: latest
+          conda-remove-defaults: true
+
+      - name: Sanity check the build
+        run: |
+          python -c "import numpy, scipy; print('numpy', numpy.__version__, 'scipy', scipy.__version__)"
+          python -c "import scipy.sparse.linalg; import librosa; print('imports OK')"
+          pip check
+
+      - name: Run tests
+        run: pytest tests/ -v

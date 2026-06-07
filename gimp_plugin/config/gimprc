@@ -1,0 +1,47 @@
+# Spectrace GIMP configuration
+# Hides menubar, rulers, and other UI elements not needed for annotation.
+# Install: copy to ~/Library/Application Support/GIMP/2.10/gimprc
+
+# Hide menubar and rulers in the default view
+(default-view
+    (show-menubar no)
+    (show-statusbar yes)
+    (show-rulers no)
+    (show-scrollbars yes)
+    (show-selection yes)
+    (show-layer-boundary no)
+    (show-canvas-boundary no)
+    (show-guides no)
+    (show-grid no)
+    (show-sample-points no))
+
+# Same for fullscreen
+(default-fullscreen-view
+    (show-menubar no)
+    (show-statusbar yes)
+    (show-rulers no)
+    (show-scrollbars yes)
+    (show-selection yes)
+    (show-layer-boundary no)
+    (show-canvas-boundary no)
+    (show-guides no)
+    (show-grid no)
+    (show-sample-points no))
+
+# Toolbox display settings
+(toolbox-color-area yes)
+(toolbox-foo-area no)
+(toolbox-image-area no)
+(toolbox-wilber no)
+
+# Prevent users from rebinding shortcuts via menu hover
+(can-change-accels no)
+
+# Save keyboard shortcuts on exit (preserves our stripped menurc)
+(save-accels yes)
+(restore-accels yes)
+
+# CRITICAL: Prevent GIMP from overwriting our stripped configs on exit
+(save-session-info no)
+(save-tool-options no)
+(save-device-status no)

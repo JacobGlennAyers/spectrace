@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE ui SYSTEM "gtkuimanager.dtd">
+<!-- Spectrace: stripped menu for annotation workflow only -->
+<ui>
+
+  <menubar action="image-menubar">
+
+    <menu action="file-menu" name="File">
+      <placeholder name="Open">
+        <menuitem action="file-open"/>
+      </placeholder>
+      <separator/>
+      <placeholder name="Save">
+        <menuitem action="file-save"/>
+        <menuitem action="file-save-as"/>
+      </placeholder>
+      <separator/>
+      <placeholder name="Export">
+        <menuitem action="file-overwrite"/>
+        <menuitem action="file-export-as"/>
+      </placeholder>
+      <separator/>
+      <menuitem action="view-close"/>
+      <menuitem action="file-quit"/>
+    </menu>
+
+    <menu action="edit-menu" name="Edit">
+      <menuitem action="edit-undo"/>
+      <menuitem action="edit-redo"/>
+    </menu>
+
+    <menu action="view-menu" name="View">
+      <menu action="view-zoom-menu" name="Zoom">
+        <menuitem action="view-zoom-revert"/>
+        <menuitem action="view-zoom-fit-in-window"/>
+        <menuitem action="view-zoom-fill-window"/>
+        <separator/>
+        <menuitem action="view-zoom-16-1"/>
+        <menuitem action="view-zoom-8-1"/>
+        <menuitem action="view-zoom-4-1"/>
+        <menuitem action="view-zoom-2-1"/>
+        <menuitem action="view-zoom-1-1"/>
+        <menuitem action="view-zoom-1-2"/>
+        <menuitem action="view-zoom-1-4"/>
+        <menuitem action="view-zoom-1-8"/>
+      </menu>
+      <separator/>
+      <menuitem action="view-zoom-fit-in-window"/>
+      <menuitem action="view-show-menubar"/>
+      <menuitem action="view-fullscreen"/>
+    </menu>
+
+    <menu action="filters-menu" name="Filters">
+      <placeholder name="python-fu"/>
+      <placeholder name="script-fu"/>
+    </menu>
+
+  </menubar><menubar name="dummy-menubar"><menu action="image-popup">
+
+    <menu action="file-menu" name="File">
+      <placeholder name="Save">
+        <menuitem action="file-save"/>
+        <menuitem action="file-save-as"/>
+      </placeholder>
+      <separator/>
+      <menuitem action="view-close"/>
+    </menu>
+
+    <menu action="edit-menu" name="Edit">
+      <menuitem action="edit-undo"/>
+      <menuitem action="edit-redo"/>
+    </menu>
+
+    <menu action="view-menu" name="View">
+      <menu action="view-zoom-menu" name="Zoom">
+        <menuitem action="view-zoom-fit-in-window"/>
+        <menuitem action="view-zoom-2-1"/>
+        <menuitem action="view-zoom-1-1"/>
+        <menuitem action="view-zoom-1-2"/>
+      </menu>
+    </menu>
+
+    <menu action="filters-menu" name="Filters">
+      <placeholder name="python-fu"/>
+      <placeholder name="script-fu"/>
+    </menu>
+
+  </menu></menubar>
+
+</ui>

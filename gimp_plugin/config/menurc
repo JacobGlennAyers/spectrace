@@ -1,0 +1,21 @@
+; Spectrace stripped menurc for GIMP 2.10
+; Only essential shortcuts for annotation work.
+; Install: copy to ~/.config/GIMP/2.10/menurc (back up original first)
+
+; --- File operations ---
+(gtk_accel_path "<Actions>/file/file-save" "<Primary>s")
+(gtk_accel_path "<Actions>/file/file-save-as" "<Primary><Shift>s")
+(gtk_accel_path "<Actions>/file/file-export-as" "<Primary><Shift>e")
+(gtk_accel_path "<Actions>/file/file-quit" "<Primary>q")
+
+; --- Edit (undo/redo) ---
+(gtk_accel_path "<Actions>/edit/edit-undo" "<Primary>z")
+(gtk_accel_path "<Actions>/edit/edit-redo" "<Primary>y")
+
+; --- View (zoom) ---
+(gtk_accel_path "<Actions>/view/view-zoom-in" "plus")
+(gtk_accel_path "<Actions>/view/view-zoom-out" "minus")
+(gtk_accel_path "<Actions>/view/view-zoom-fit-in-window" "<Shift><Primary>j")
+(gtk_accel_path "<Actions>/view/view-zoom-1-1" "1")
+(gtk_accel_path "<Actions>/view/view-zoom-2-1" "2")
+(gtk_accel_path "<Actions>/view/view-zoom-fit-image" "<Shift><Primary>e")

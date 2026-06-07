@@ -6,7 +6,7 @@ A Python-based workflow for creating precise binary mask annotations on spectrog
 
 Spectrace streamlines the process of annotating audio spectrograms by combining Python's audio processing capabilities with GIMP's intuitive layer-based drawing interface. The workflow allows researchers to:
 
-1. Generate spectrograms from audio files
+1. Open a WAV file directly in GIMP (automatic spectrogram generation)
 2. Draw detailed binary masks on spectrograms using GIMP's tools
 3. Organize annotations using layer groups (e.g., fundamental frequency, harmonics, heterodynes)
 4. Export annotations to multiple formats (XCF, HDF5, Excel)
@@ -16,378 +16,370 @@ This tool is particularly useful for creating training datasets for machine lear
 
 ## Key Features
 
-- **Audio to Spectrogram**: Automatically generates spectrograms from audio files with customizable parameters
-- **Template-Based Annotation**: Use predefined layer structures to ensure consistent labeling across projects
-- **GIMP Integration**: Leverage GIMP's familiar interface and drawing tools for precise mask creation
+- **WAV File Handler**: Open WAV files directly in GIMP — the plugin automatically generates and loads the spectrogram (no command-line steps needed)
+- **CallMark Import**: Import vocalization onset/offset data from CallMark Excel exports, filter by individual and cluster, and navigate through vocalizations one-by-one inside GIMP
+- **One-Click Annotation Setup**: `Filters > Spectrace > Setup Annotation` creates all 26 annotation layers, configures tools, and starts the background monitor
+- **Tool Enforcement**: The plugin continuously enforces correct pencil settings (1px, hardness 100, dynamics off) so annotators cannot accidentally misconfigure the tools
+- **Auto Color Switching**: Each annotation layer gets a unique foreground color automatically — switching layers changes the drawing color
+- **Dynamic Templates**: Use any XCF file as a template, or fall back to the built-in orca template
+- **Locked-Down UI**: The installer strips GIMP down to essentials (pencil + eraser only, minimal keyboard shortcuts) to prevent accidental operations
+- **Heterodyne Validation**: Validate annotated heterodyne contours against predicted frequencies computed from HFC/LFC fundamentals using IoU and contour-level metrics
 - **Multiple Export Formats**: Convert annotations to HDF5 for ML pipelines or Excel for spreadsheet analysis
 - **Batch Visualization**: Generate overlay and individual layer visualizations across all projects
-- **Color Management**: Automatic color assignment to annotation classes for clear visualization
-- **Binary Morphology Tools**: Included utilities for post-processing binary masks
+
+---
 
 ## Installation
 
-### Prerequisites
+### Step 1: Clone the Repository and Create the Conda Environment
 
-**Python Environment:**
-- Python 3.8 or higher
-- Conda or Miniconda (recommended for dependency management)
+You must have first installed [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install/overview) and [Git](https://git-scm.com/install/) on your system.
 
-**GIMP Installation:**
+Navigate to the folder you want the spectrace folder to exist in via a terminal with conda configured - 
 
-⚠️ **IMPORTANT: You must install GIMP version 2.10.x** - The `gimpformats` Python library used by Spectrace is only compatible with GIMP 2.10 and will not work with GIMP 3.0 or later versions.
-
-*Linux (Ubuntu/Debian):* (OUT OF DATE -- UPDATE SOLUTION FOR LINUX COMING
-```bash
-sudo apt update
-sudo apt install gimp=2.10.*
-```
-
-If GIMP 2.10 is not available in your distribution's repositories, you can use Flatpak:
-```bash
-flatpak install flathub org.gimp.GIMP//2.10
-flatpak run org.gimp.GIMP//2.10
-```
-
-*Windows:*
-1. Download GIMP 2.10.30 from this [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) (includes both Windows installer and source code)
-   - Alternative: Download from [FossHub GIMP archive](https://www.fosshub.com/GIMP-old.html)
-2. Run the installer (`gimp-2.10.30-setup.exe`) and follow the installation wizard
-3. Accept default settings unless you have specific preferences
-4. **Do not upgrade to GIMP 3.0** if prompted - this will break compatibility with Spectrace
-
-
-*MacOS:*
-Download from the .dmg from this [release](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version) or [FossHub archive](https://www.fosshub.com/GIMP-old.html).
-
-### Setting Up Spectrace
-
-1. **Clone or download this repository:**
 ```bash
 git clone https://github.com/JacobGlennAyers/spectrace.git
 cd spectrace
-```
-
-2. **Create the conda environment:**
-```bash
 conda env create -f environment.yml
 conda activate spectrace
 ```
 
-This will install all required Python dependencies including:
-- librosa (audio processing)
-- numpy, pandas (data manipulation)
-- matplotlib (visualization)
-- gimpformats (reading GIMP XCF files - **v2.10 only**)
-- h5py (HDF5 file handling)
-- pillow (image processing)
+This installs all Python dependencies:
 
-3. **Verify installation:**
+| Package | Purpose |
+|---------|---------|
+| librosa | Audio processing and spectrogram generation |
+| numpy, pandas | Data manipulation |
+| matplotlib | Visualization |
+| gimpformats | Reading GIMP 2.10 XCF files |
+| h5py | HDF5 file handling |
+| pillow | Image processing |
+| openpyxl | Excel export |
+| scikit-learn | ML utilities |
 
-The repository includes an example orca call (`audio/orca.wav`) and template (`templates/orca_template.xcf`). Test your installation by creating a project from this example:
+### Step 2: Install GIMP 2.10.x
+
+> **IMPORTANT:** You must install GIMP version **2.10.x** — not GIMP 3.0 or later. The `gimpformats` Python library and the Spectrace plugin both require GIMP 2.10. **Do not install 3.0**
+
+
+**macOS:**
+
+Download the `.dmg` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version). 
+
+Double click on the .dmg file in downloads and follow the macOS instructions.
+
+**Windows:**
+
+1. Download `gimp-2.10.30-setup.exe` from the [Spectrace releases page](https://github.com/JacobGlennAyers/spectrace/releases/tag/correct_gimp_version)
+2. Run the installer and accept default settings
+
+**Linux (Ubuntu/Debian):**
+
+Running - 
+```bash
+bash install-gimp-linux.sh
+```
+will automatically add GIMP 2.10.38 to your Applications and create a Desktop Icon. 
+
+
+**After installing, launch GIMP once and then close it.** This creates the configuration directory that the Spectrace installer needs.
+
+
+### Step 3: Install the Spectrace GIMP Plugin
+
+Run the installer (works on macOS, Linux, and Windows):
 
 ```bash
-python start_project.py
+python gimp_plugin/install.py
 ```
 
-If successful, you should see output indicating a new project folder was created in `projects/`.
+The installer automatically:
+1. Copies the plugin into GIMP's plug-ins directory
+2. Installs a locked-down UI configuration (pencil + eraser only, minimal keyboard shortcuts)
+3. Detects your conda `spectrace` environment and writes the path to `~/.spectrace/config.json`
+4. Backs up your original GIMP configuration (restored when you uninstall)
+
+
+### Step 4: Verify the Installation
+
+1. **Close GIMP completely** if it's open (the plugin only loads at startup)
+2. **Reopen GIMP**
+3. You should see a stripped-down interface: only Pencil and Eraser in the toolbox, only Tool Options and Layers panels
+4. Right-click the canvas and check that `Filters > Spectrace` appears with three entries:
+   - `Next Vocalization` (active during CallMark sessions)
+   - `Reset Tool Settings`
+   - `Setup Annotation`
+
+![GIMP 2.10 with Spectrace plugin — Filters > Spectrace submenu](docs/images/setup-annotation-menu.png)
+
+---
 
 ## Quick Start Guide
 
-### 1. Prepare Your Audio File
+The Spectrace plugin eliminates all manual GIMP setup. There are two import workflows:
 
-Place your audio file (WAV format recommended) in the `audio/` directory.
+- **Standard Import**: Open a WAV file, annotate the full spectrogram
+- **CallMark Import**: Load a CallMark Excel export, filter by individual/cluster, and navigate through vocalizations one-by-one
 
-### 2. Create a New Project
+Both workflows end the same way: draw contours on annotation layers, save.
 
-Open `start_project.py` in a text editor and modify the configuration:
+### GIF Demonstrations
 
-```python
-audio_info = {
-    "clip_path": "audio/your_audio_file.wav",
-    "nfft": 2048,  # FFT window size
-    "grayscale": True
-}
-```
+**Full workflow demo (CallMark import):**
+![Spectrace annotation workflow demo](docs/images/spectrace-demo.gif)
 
-Parameters:
-- `clip_path`: Path to your audio file
-- `nfft`: FFT window length (larger values = better frequency resolution, worse time resolution)
-- `grayscale`: Whether to generate grayscale spectrograms (recommended: True)
+---
 
-Run the script to create your project:
-```bash
-python start_project.py
-```
+### Workflow A: Standard Import
 
-This creates:
-- A new folder in `projects/` named `your_audio_file_0`
-- A spectrogram PNG image
-- Metadata files (pkl, csv)
-- A copy of the audio file
+**Open WAV** &rarr; **Setup Annotation** &rarr; **Draw** &rarr; **Save**
 
-**Note:** You can run `start_project.py` multiple times for the same audio file. Each run creates a new project with an incremented index (`your_audio_file_0`, `your_audio_file_1`, etc.). This is useful when you want to annotate different portions of the same recording or create multiple sets of annotations for the same audio.
+#### 1. Open Your WAV File in GIMP
 
-### 3. Set Up GIMP for Annotation
+1. In GIMP, go to `File > Open`
+2. Navigate to your WAV audio file and select it
+3. The **Spectrace - Import** dialog appears
+4. Leave the **CallMark import** checkbox unchecked
+5. Optionally browse to a custom template XCF, or leave it as `(default orca template)`
+6. Click OK
 
-#### 3.1 Open Your Files in GIMP
+The plugin automatically:
+- Generates a spectrogram using librosa (via the `spectrace` conda environment)
+- Creates a project folder in `projects/` with the spectrogram PNG and metadata
+- Loads the spectrogram into GIMP
 
-1. **Open GIMP 2.10**
+> **Tip:** You can open any WAV file from anywhere on your computer. The plugin creates the project folder automatically.
 
-2. **Open the template file first:**
-   - Click `File > Open` in the top left corner of the GIMP window
-   - Navigate to `templates/orca_template.xcf` (or your own template) in your spectrace directory
-   - Click "Open"
-   
-   This template contains all the layers you'll need to draw frequency contours.
-<img width="482" height="629" alt="image" src="https://github.com/user-attachments/assets/f2c71e38-8a01-41a1-aaff-ad39ed36e7e5" />
+> **Note:** If you open the same WAV file again, the plugin reuses the most recent existing spectrogram instead of regenerating it.
 
+#### 2. Set Up Annotation Layers
 
-3. **Open your spectrogram image:**
-   - Click `File > Open` again (keep the template open)
-   - Navigate to `projects/your_audio_file_0/your_audio_file_0_spectrogram.png`
-   - Click "Open"
-   
-   You should now have two tabs open at the top of your GIMP window: one for the template, one for your spectrogram image.
+1. Go to `Filters > Spectrace > Setup Annotation`
+2. The plugin creates the full annotation layer hierarchy (all 26 layers with correct grouping), sets the Pencil tool to correct settings (1px, hardness 100, dynamics off), and starts a background monitor that enforces tool settings and auto-switches foreground colors when you change layers
 
-#### 3.2 Copy the Template Layers to Your Spectrogram
+![GIMP with annotation layers created and ready to draw](docs/images/annotation-layers-panel.png)
 
-Now you need to transfer the layer structure from the template to your spectrogram image:
+**You are now ready to draw.**
 
-1. **Switch to the template tab** by clicking on it in the top row of the GIMP window
-<img width="1096" height="217" alt="image" src="https://github.com/user-attachments/assets/29c53dce-a83c-4075-9193-c2906cd6e68a" />
+#### 3. Draw Your Annotations
 
-
-2. **Locate the Layers panel** (usually on the right side of the window):
-   - The Layers panel is typically in the bottom-right or top-right corner
-   - If you don't see it: `Windows > Dockable Dialogs > Layers`
-
-3. **Select the layer group** in the Layers panel:
-   - Look for the layer group named `OrcinusOrca_FrequencyContours`
-   - **Click on this layer group name** to select it
-   - The selected layer will be highlighted (usually with a white or blue background)
-   - **Important:** Select the layer GROUP (with a folder icon and +/- sign), not an individual layer within it
-<img width="1096" height="639" alt="image" src="https://github.com/user-attachments/assets/c0180a80-be3f-49bd-9edd-b50273dd92b6" />
-
-
-4. **Copy the layer group:**
-   - Press `Ctrl+C` (Windows/Linux) or `Cmd+C` (Mac)
-   - OR: Click `Edit > Copy` from the menu
-   - The entire layer group structure is now copied to your clipboard
-
-5. **Switch to your spectrogram image** by clicking on its tab in the top row of the GIMP window
-<img width="1096" height="217" alt="image" src="https://github.com/user-attachments/assets/29c53dce-a83c-4075-9193-c2906cd6e68a" />
-
-6. **Paste the template layers:**
-   - Click `Edit > Paste as > New Layer` from the menu at the top left
-   - This adds the entire layer group to your spectrogram image
-<img width="678" height="805" alt="image" src="https://github.com/user-attachments/assets/a2da295f-39bb-4ed6-b124-93e27817bea4" />
-
-
-   You should now see a new layer group `OrcinusOrca_FrequencyContours copy` in your Layers panel, above your spectrogram image.
-
-#### 3.3 Resize Layers to Match Your Spectrogram
-
-**⚠️ CRITICAL STEP - DO NOT SKIP!**
-
-The template layers must be resized to match your spectrogram's exact dimensions, or your annotations will be cropped, misaligned, or the wrong size entirely.
-
-1. **Make sure the pasted layer group is still selected** (it should be highlighted in the Layers panel)
-
-2. **Resize the layers:**
-   - Click `Layer > Layer to Image Size` from the menu at the top left
-<img width="751" height="714" alt="image" src="https://github.com/user-attachments/assets/519c23a7-d2cf-473a-9b3b-526a57c4f24d" />
-
-
-3. **Verify the resize worked:**
-   - You should see a colorful dashed line (marching ants border) around the entire spectrogram image
-   - **Before resizing:** This dashed line might have been smaller, offset, or not covering the whole image
-   - **After resizing:** The dashed line should lie exactly on the boundaries of your spectrogram
-   
-   The resize operation adjusts all layers in the group to match your spectrogram's exact pixel dimensions.
-<img width="987" height="495" alt="image" src="https://github.com/user-attachments/assets/4ee6ac6c-8b60-4c44-85a4-74b3d61d4e6c" />
-
-### GIF Demonstration
-![clip1](https://github.com/user-attachments/assets/12a65892-cdad-4b6c-988e-4aae47054d05)
-
-#### 3.4 Rename the Layer Group and Unlock Layers
-
-When you pasted the template, GIMP automatically added " copy" to the layer group name and locked the layers. You need to fix both issues:
-
-1. **Right-click on the layer group** `OrcinusOrca_FrequencyContours copy` in the Layers panel
-
-2. **Select `Edit Layer Attributes`** from the context menu
-<img width="734" height="1194" alt="image" src="https://github.com/user-attachments/assets/8c9e53a0-9a84-4a0c-92fc-2853245f87a0" />
-
-
-3. **In the dialog window that opens:**
-   
-   a. **Remove " copy" from the Layer name:**
-      - You should be on the "Properties" tab (default)
-      - In the **Layer name** field, delete " copy" (including the space before it)
-      - The field should now show: `OrcinusOrca_FrequencyContours`
-      - **Why this matters:** The Python scripts expect an exact layer name match. The " copy" suffix will cause the scripts to fail.
-   
-   b. **Click on the "Switches" tab** at the top of the dialog
-   
-   c. **Uncheck all three lock options:**
-      - [ ] Lock pixels
-      - [ ] Lock position and size
-      - [ ] Lock alpha
-      - All three checkboxes should be empty
-      - **Why this matters:** Locked layers prevent you from drawing, erasing, or making any modifications.
-   
-   d. **Click "OK"** to apply the changes
-<img width="711" height="629" alt="image" src="https://github.com/user-attachments/assets/c4aeeec7-b346-4920-bc0c-fbc8ee47b39f" />
-
-
-#### 3.5 Verify Your Setup
-
-Your Layers panel should now show (from top to bottom):
-
-```
-👁 OrcinusOrca_FrequencyContours  ← (no " copy"!)
-    Click the + to expand and see sublayers:
-    👁 Heterodynes
-    👁 Subharmonics  
-    👁 heterodyne_or_subharmonic_or_other
-    👁 Cetacean_AdditionalContours
-    👁 harmonics_HFC
-    👁 f0_HFC
-    👁 unsure_HFC
-    👁 harmonics_LFC
-    👁 f0_LFC
-    👁 unsure_LFC
-👁 your_audio_file_0_spectrogram.png  ← (your spectrogram)
-```
-
-- The `OrcinusOrca_FrequencyContours` group should be **above** your spectrogram layer
-- If it's below, drag and drop it to move it above the spectrogram
-- You should **not** see any lock icons next to the layer name
-
-**You're now ready to start drawing!**
-
-### 4. Draw Your Annotations
-
-**Initial Setup:**
-
-1. **Zoom in for precision:** `View > Zoom > 2:1 (200%)`
-<img width="767" height="882" alt="image" src="https://github.com/user-attachments/assets/daec8555-bf92-48b1-9f40-22a1358a952c" />
-
-2. **Select the Pencil tool** (not paintbrush - this is critical!)
-   - Click the pencil icon in the toolbox, OR
-   - `Tools > Paint Tools > Pencil`
-
-3. **Configure tool settings:**
-   - Size: `1.0` pixel
-   - Hardness: `100`
-   - Force: `100`
-   - **Important:** Expand "Dynamics Options"
-   - Check "Apply Jitter"
-   - Set Amount: `0.00`
-<img width="432" height="1112" alt="image" src="https://github.com/user-attachments/assets/ae1a5a84-03a0-4410-a1f9-a6e19e6b2bf0" />
-
-4. **Select the layer** where you want to draw (e.g., `f0_LFC` for fundamental frequency)
-   - Layer groups have +/- icons - click the + to expand and see individual layers
-   - Click on a specific layer to select it (not the group itself)
-<img width="1095" height="733" alt="image" src="https://github.com/user-attachments/assets/204212e2-3f17-4795-a480-9a5fabff0b70" />
-
-5. **Choose a drawing color:**
-   - Click the foreground color square (upper rectangle in toolbox)
-   - Select a color using the color picker, OR
-   - Enter HTML notation directly (recommended for consistency)
-   - Use different colors for different layers to make it easier to verify your work later
-<img width="1025" height="765" alt="image" src="https://github.com/user-attachments/assets/3e3b03ef-8255-4a87-aeae-2531b3e9f32a" />
+1. **Expand the layer group** in the Layers panel (click the `+` icon next to `OrcinusOrca_FrequencyContours`)
+2. **Click on a layer** to select it (e.g., `f0_LFC` for fundamental frequency) — the foreground color changes automatically
+3. **Zoom in** for precision: use `View > Zoom > 2:1 (200%)` or scroll-wheel zoom
+4. **Draw** along the frequency contour on the spectrogram — the Pencil tool is already configured
+5. **Switch to Eraser** when you need to correct — the eraser size is adjustable and remembered across tool switches
 
 **Drawing Tips:**
-
-- Draw along the frequency contour you wish to annotate
-- You don't need to press any buttons on your pen/mouse - just draw
-- Use `Ctrl+Z` to undo mistakes
-- Use the Eraser tool for corrections (same hardness/force settings: 100/100)
-<img width="391" height="709" alt="image" src="https://github.com/user-attachments/assets/f6b68cdd-4ed4-479b-b042-eafdbfdcb085" />
-
-- Make sure you're on the correct layer before erasing
+- Switch layers by clicking layer names in the Layers panel — the color updates automatically
 - Toggle layer visibility using the "eye" icon to check your work
-- When drawing, start with the bottom layer in the list and work upward to avoid forgetting layers
+- If the pencil stops working correctly, use `Filters > Spectrace > Reset Tool Settings`
+- Use `Ctrl+Z` (`Cmd+Z` on Mac) to undo mistakes
 
 **What to Draw:**
+- Draw all contours within the onset and offset boundaries of the vocalization
+- If multiple calls from the **same vocalization** are present, draw them all in one project
+- If calls from **different individuals/vocalizations** are present, create separate projects for each
 
-Draw all contours that are within the onset and offset boundaries you entered in your spreadsheet:
-- If multiple calls from the **same vocalization** are present → draw them all in one project
-- If calls from **different individuals/vocalizations** are present → create separate projects for each
+#### 4. Save Your Work
 
-### 5. Managing Layers and Corrections
-
-**If you drew on the wrong layer:**
-
-1. Click on the layer with incorrect contours
-2. Zoom out: `View > Zoom > 1:1 (100%)`
-3. Select the Rectangle Select tool
-4. Draw a rectangle around the contours to copy
-5. Press `Ctrl+C` to copy
-6. Click on the correct destination layer
-7. Press `Ctrl+V` to paste
-8. A "Floating Selection (Pasted Layer)" will appear - position it above the target layer if needed (drag and drop)
-9. Right-click "Floating Selection (Pasted Layer)" → `Anchor Layer`
-10. Erase any unwanted contours from the original or destination layer
-
-**Checking your work:**
-
-Click the "eye" icons next to layers to toggle visibility - this helps verify each contour is on the correct layer.
-<img width="1102" height="741" alt="image" src="https://github.com/user-attachments/assets/d4ad6337-a49b-45ec-91a8-76f3c9dd4a88" />
-### GIF Demonstration
-![clip2](https://github.com/user-attachments/assets/0b40cdfb-3127-425b-9b9e-8ce0af64f9a4)
-
-### 6. Save Your Work
-
-**Save frequently during annotation:**
-
-1. `File > Save As...` (first time) or `File > Save` / `Ctrl+S` (subsequent saves)
+1. `File > Save As...` (first time) or `Ctrl+S` (subsequent saves)
 2. Save the XCF file in your project folder: `projects/your_audio_file_0/your_audio_file_0.xcf`
-3. The XCF filename should match the project folder name
+3. The XCF filename needs to be changed to match the project folder name
 
-### GIF Demonstration
-![clip3](https://github.com/user-attachments/assets/c4f07c9f-a1de-4ef9-933a-60ca48df8a0c)
+---
 
+### Workflow B: CallMark Import
 
-**After completing all annotations for an audio file:**
+**Open WAV** &rarr; **Select Excel + Filters** &rarr; **Setup Annotation** &rarr; **Draw** &rarr; **Next Vocalization** &rarr; **Repeat**
 
-- If you need to annotate more calls from the same audio file → return to Step 2 and create a new project
-- If all annotations are complete → proceed to visualization (Step 7)
+CallMark import is designed for batch annotation of vocalizations catalogued by [CallMark](https://github.com/paladinprime/callmark). It segments a long recording into individual vocalizations using onset/offset times from a CallMark Excel export, and lets you navigate through them one-by-one inside GIMP.
 
-### 7. Visualize Your Annotations
+#### 1. Open Your WAV File and Configure CallMark
 
-Open `produce_visuals.py` and specify your audio file basename:
+1. In GIMP, go to `File > Open` and select your WAV file:
+
+![GIMP File > Open dialog with WAV file selected](docs/images/gimp-open-wav.png)
+
+2. In the **Spectrace - Import** dialog, check **CallMark import**
+3. Click **Browse...** next to "Excel file" and select your CallMark `.xlsx` export
+4. The plugin parses the Excel file and populates the filter dropdowns:
+
+![Spectrace Import dialog with CallMark import enabled and filters visible](docs/images/import-dialog-callmark.png)
+
+5. **Filter by Individual**: Select a specific individual ID or leave as "All"
+6. **Filter by Cluster**: Select a specific cluster name or leave as "All"
+7. The vocalization count updates live as you change filters
+8. **Start At**: Optionally set the starting vocalization number (useful for resuming work)
+9. Click OK
+
+The plugin generates a spectrogram for the first vocalization and loads it into GIMP.
+
+#### 2. Set Up Annotation Layers and Draw
+
+Same as the standard workflow:
+1. Go to `Filters > Spectrace > Setup Annotation`
+2. Draw your contours on the annotation layers
+
+#### 3. Navigate to the Next Vocalization
+
+When you finish annotating a vocalization:
+
+1. Go to `Filters > Spectrace > Next Vocalization`
+
+![Filters > Spectrace submenu showing Next Vocalization, Reset Tool Settings, Setup Annotation](docs/images/spectrace-menu-full.png)
+
+2. The plugin automatically:
+   - Saves your current XCF file
+   - Generates the spectrogram for the next vocalization (or reopens an existing XCF if you previously annotated it)
+   - Loads it into the same GIMP window (no duplicate windows)
+   - Displays a status message: vocalization number, individual, cluster, category, and age
+
+3. Repeat: **Setup Annotation** &rarr; **Draw** &rarr; **Next Vocalization** until done
+
+#### CallMark Session Persistence
+
+The plugin saves session state to `~/.spectrace/callmark_session.json`. If GIMP closes mid-session, you can resume by opening the same WAV file with the same CallMark settings and using the **Start At** spinner to jump to where you left off.
+
+#### CallMark Project Folder Structure
+
+CallMark imports create a nested folder hierarchy:
+
+```
+projects/
+└── your_audio_file_0/
+    └── R3277/                        # subfolder named by filter (individual, cluster, or both)
+        ├── v000/                     # vocalization 0
+        │   ├── v000_spectrogram.png
+        │   ├── your_audio_file.wav   # segment WAV
+        │   ├── v000.xcf             # annotations
+        │   └── metadata.csv
+        ├── v001/                     # vocalization 1
+        │   └── ...
+        └── v002/
+            └── ...
+```
+
+The subfolder name reflects the active filters (e.g., `R3277`, `vocal`, or `R3277_vocal` if both individual and cluster are selected).
+
+---
+
+## Convert to HDF5 Format
+
+To build a more flexible file format for the annotations, convert XCF annotations to HDF5:
+
+Edit `xcf_to_hdf5.py` to set paths:
 
 ```python
-clip_basename = "your_audio_file"  # without extension or index number
+project_folder = "./projects"
+ml_data_folder = "./hdf5_files"
 ```
 
-Generate visualization images:
+then run:
 
 ```bash
-python produce_visuals.py
+python xcf_to_hdf5.py
 ```
 
-This creates overlay and individual layer visualizations in the `visualizations/` folder, organized by audio file basename.
 
-## Workflow Details
+This creates one HDF5 file **per audio clip** (consolidating all annotation passes) plus `dataset_index.csv`.
+
+Each HDF5 file contains:
+- `spectrogram`: Grayscale spectrogram array (H, W), stored once per clip
+- `annotations/<index>/masks`: Binary masks array (C, H, W) per annotation set
+- `annotations/<index>/`: Per-annotation attributes: `notes` (str) and `timing_drift` (bool)
+- `metadata/`: Shared audio parameters (sample rate, nfft, noverlap, duration, etc.)
+- `@class_names`: JSON list of annotation class names (root attribute)
+- `@num_annotations`: Number of annotation sets in this file (root attribute)
+
+### Loading HDF5 Data
+
+```python
+from hdf5_utils import HDF5SpectrogramLoader
+
+with HDF5SpectrogramLoader("hdf5_files/orca_0.hdf5") as loader:
+    # Load spectrogram, masks, and metadata for the first annotation set
+    spec, masks, metadata = loader.load(annotation_index=0)
+    class_names = loader.get_class_names()
+
+    # Get specific class mask from a specific annotation set
+    f0_mask = loader.get_class_mask("f0_LFC", annotation_index=0)
+
+    # List all annotation sets in this file
+    indices = loader.get_annotation_indices()  # e.g. [0, 1, 2]
+
+    # Load masks for a different annotation set
+    masks_v2 = loader.load_masks(annotation_index=1)
+
+    # Check which classes have annotations (non-zero masks)
+    non_empty = loader.get_non_empty_classes(annotation_index=0)
+```
+
+### Export to Excel
+
+Convert annotations to Excel spreadsheets:
+
+Edit `export_contours_to_excel.py` to configure:
+
+```python
+ml_data_folder = "./hdf5_files"
+output_excel = "whale_contours_export.xlsx"
+contour_method = "all_points"  # or "min_max" or "centroid"
+```
+
+then run:
+
+```bash
+python export_contours_to_excel.py
+```
+
+
+The Excel file contains:
+- **Summary**: Overview of all samples
+- **Contours**: Time-frequency points for each annotation
+- **Statistics**: Per-annotation metrics (duration, bandwidth, etc.)
+- **Class_Summary**: Aggregate statistics per class
+
+Extraction methods:
+- `"centroid"`: One frequency value per time frame (smoothest contours)
+- `"min_max"`: Minimum and maximum frequency per time frame (captures bandwidth)
+- `"all_points"`: Every pixel (most detailed, largest file)
+
+---
+
+## Reference
 
 ### Project Structure
 
-Each project folder contains:
+**Standard import** — one folder per annotation pass:
+
 ```
-your_audio_file_0/
-├── your_audio_file_0_spectrogram.png  # Spectrogram image
-├── your_audio_file.wav                 # Copy of audio file
-├── your_audio_file_0.xcf              # GIMP file with masks
-├── metadata.pkl                        # Project metadata
-└── metadata.csv                        # Human-readable metadata
+projects/
+└── your_audio_file_0/
+    ├── your_audio_file_0_spectrogram.png  # Spectrogram image
+    ├── your_audio_file.wav                 # Copy of audio file
+    ├── your_audio_file_0.xcf              # GIMP file with annotations
+    ├── metadata.pkl                        # Project metadata
+    └── metadata.csv                        # Human-readable metadata
+```
+
+**CallMark import** — nested by filter and vocalization index:
+
+```
+projects/
+└── your_audio_file_0/
+    └── R3277/                              # filter subfolder
+        ├── v000/
+        │   ├── v000_spectrogram.png
+        │   ├── your_audio_file.wav         # segment WAV
+        │   ├── v000.xcf
+        │   └── metadata.csv
+        ├── v001/
+        └── ...
 ```
 
 ### Layer Organization
 
-The included orca template uses a hierarchical layer structure designed to capture the complexity of killer whale vocalizations:
+The built-in orca template creates a hierarchical layer structure designed for killer whale vocalizations:
 
 ```
 OrcinusOrca_FrequencyContours/
@@ -413,196 +405,150 @@ OrcinusOrca_FrequencyContours/
 └── unsure_LFC
 ```
 
-**Key abbreviations:**
-- **HFC** = High-Frequency Component (for biphonic calls)
-- **LFC** = Low-Frequency Component (for biphonic calls or monophonic calls)
-- **f0** = Fundamental frequency
+### Configuration File
 
-**Usage notes:**
-- For **biphonic calls**, use both HFC and LFC layer sets
-- For **monophonic calls**, use only LFC layer sets
-- Heterodynes are numbered according to which harmonic of the HFC they're affiliated with
-- Use "unsure" layers when classification is ambiguous
+The install script creates `~/.spectrace/config.json` (or `%USERPROFILE%\.spectrace\config.json` on Windows):
 
-The template is specifically designed for killer whale (orca) vocalizations but can be adapted for other species. See `templates/orca_template.yaml` for complete documentation with scientific references.
-
-### Multiple Projects per Audio File
-
-You may want to create multiple projects from the same audio file for several reasons:
-- Annotating different vocalizations within the same recording
-- Creating alternative annotation sets with different interpretations
-- Separating overlapping calls that require different layer configurations
-
-To create additional projects, simply run `start_project.py` again with the same audio file configuration. The script automatically increments the project index, creating folders like `your_audio_file_0`, `your_audio_file_1`, `your_audio_file_2`, etc.
-
-### Color Mapping
-
-The first time you visualize a project, Spectrace automatically:
-- Discovers all layer names from your template or existing projects
-- Assigns a unique color to each annotation class
-- Saves the mapping to `layer_color_mapping.json`
-
-This ensures consistent colors across all visualizations. To use a master template for color assignment:
-
-```python
-template_xcf_path = "./templates/orca_template.xcf"
+```json
+{
+  "spectrace_root": "/path/to/spectrace",
+  "python3_path": "/path/to/conda/envs/spectrace/bin/python",
+  "default_nfft": 2048,
+  "default_grayscale": true,
+  "default_project_dir": "projects"
+}
 ```
 
-Or set to `None` to auto-discover from existing projects.
+| Setting | Description |
+|---------|-------------|
+| `spectrace_root` | Path to your cloned spectrace repository |
+| `python3_path` | Path to the Python interpreter in the spectrace conda environment |
+| `default_nfft` | FFT window size for spectrogram generation (higher = better frequency resolution, worse time resolution) |
+| `default_grayscale` | Whether to generate grayscale spectrograms (recommended: `true`) |
+| `default_project_dir` | Directory for project output (relative to `spectrace_root` or absolute) |
 
-## Advanced Usage
+If the installer could not auto-detect your conda environment, you will need to set `python3_path` manually:
 
-# HDF5 Schema — Converting to HDF5 Format
-
-For more flexibility, convert XCF annotations to HDF5:
-
-Edit `xcf_to_hdf5.py` to set your input/output paths:
-```python
-project_folder = "./projects"
-ml_data_folder = "./hdf5_files"
-```
-
-Run the conversion:
 ```bash
-python xcf_to_hdf5.py
+conda activate spectrace
+which python    # macOS/Linux
+where python    # Windows
 ```
 
-This creates:
-- One HDF5 file **per audio clip** (consolidating all annotation passes for that clip)
-- `dataset_index.csv` with metadata for all annotation sets
+Copy the output path into `~/.spectrace/config.json`.
 
-Each HDF5 file contains:
-- `spectrogram`: Grayscale spectrogram array (H, W), stored once per clip
-- `annotations/<index>/masks`: Binary masks array (C, H, W) per annotation set, where C is number of classes
-- `annotations/<index>/`: Per-annotation attributes: `notes` (str) and `timing_drift` (bool)
-- `metadata/`: Shared audio parameters (sample rate, nfft, noverlap, duration, etc.)
-- `@class_names`: JSON list of annotation class names (root attribute)
-- `@num_annotations`: Number of annotation sets in this file (root attribute)
-
-## Loading HDF5 Data
-
-```python
-from hdf5_utils import HDF5SpectrogramLoader
-
-with HDF5SpectrogramLoader("hdf5_files/orca_0.hdf5") as loader:
-    # Load spectrogram, masks, and metadata for the first annotation set
-    spec, masks, metadata = loader.load(annotation_index=0)
-    class_names = loader.get_class_names()
-
-    # Get specific class mask from a specific annotation set
-    f0_mask = loader.get_class_mask("f0_LFC", annotation_index=0)
-
-    # List all annotation sets in this file
-    indices = loader.get_annotation_indices()  # e.g. [0, 1, 2]
-
-    # Load masks for a different annotation set
-    masks_v2 = loader.load_masks(annotation_index=1)
-
-    # Check which classes have annotations (non-zero masks)
-    non_empty = loader.get_non_empty_classes(annotation_index=0)
-```
-
-
-### Exporting to Excel
-
-Convert annotations to Excel spreadsheets for analysis in programs like Microsoft Excel or Google Sheets.
-
-Edit `export_contours_to_excel.py` to configure:
-```python
-ml_data_folder = "./hdf5_files"
-output_excel = "whale_contours_export.xlsx"
-contour_method = "centroid"  # or "min_max" or "all_points"
-```
-
-Run the export:
-```bash
-python export_contours_to_excel.py
-```
-
-The Excel file contains multiple sheets:
-- **Summary**: Overview of all samples
-- **Contours**: Time-frequency points for each annotation
-- **Statistics**: Per-annotation metrics (duration, bandwidth, etc.)
-- **Class_Summary**: Aggregate statistics per class
-
-Extraction methods:
-- `"centroid"`: One frequency value per time frame (smoothest contours)
-- `"min_max"`: Minimum and maximum frequency per time frame (captures bandwidth)
-- `"all_points"`: Every pixel (most detailed, largest file)
-
-### Binary Morphology Operations
-
-The `demos/` folder includes examples of common binary morphology operations (erosion, dilation, opening, closing) that are frequently used for post-processing binary masks. These operations can help clean up annotations, connect nearby regions, or extract specific features. See `demos/binary_morphology_interactive.ipynb` for interactive examples and `demos/bin_morph.py` for a standalone demonstration script.
+---
 
 ## Template Customization
 
-To create your own annotation template:
+To create your own annotation template for a different species or use case:
 
 1. Create a new XCF file in GIMP 2.10
-2. Set up your layer groups with descriptive names
-3. Save as `templates/your_template.xcf`
-4. Create a corresponding YAML file documenting each layer's purpose
-5. Update scripts to reference your template:
-```python
-layer_group_name = "YourSpecies_FrequencyContours"
-template_xcf_path = "./templates/your_template.xcf"
+2. Create a **top-level layer group** (e.g., `YourSpecies_FrequencyContours`)
+3. Inside it, create subgroups and layers as needed
+4. Save as `templates/your_template.xcf`
+5. Optionally create a corresponding YAML file documenting each layer's purpose
+
+When running `Setup Annotation`, browse to your template XCF — the plugin will dynamically extract the layer structure and generate unique colors for each layer.
+
+**Note:** Templates created in GIMP 2.10 must be used exclusively with GIMP 2.10. Do not open or save them in GIMP 3.0.
+
+---
+
+## Heterodyne Validation
+
+The heterodyne validation pipeline checks the physical consistency of your annotations. It extracts `f0_HFC` and `f0_LFC` fundamental frequency contours from your annotated masks, computes predicted heterodyne frequencies using the relationship `f_het = n * f_HFC +/- k * f_LFC`, and compares these predictions against your annotated heterodyne contours.
+
+This serves as a quality check: if annotations are physically consistent, predicted heterodynes should overlap with annotated ones.
+
+### Running Validation
+
+```bash
+conda activate spectrace
+
+# Single clip
+python heterodyne_validation.py --hdf5 ml_data/clip.hdf5
+
+# Batch mode (all HDF5 files in a directory)
+python heterodyne_validation.py --hdf5-dir ml_data/
+
+# With custom parameters
+python heterodyne_validation.py --hdf5 clip.hdf5 --kernel-size 7 --max-k 3
+
+# Skip plot generation
+python heterodyne_validation.py --hdf5 clip.hdf5 --no-plots
 ```
 
-**Note:** Templates created in GIMP 2.10 must be used exclusively with GIMP 2.10. Do not open or save them in GIMP 3.0, as this will make them incompatible with the `gimpformats` library.
+### What It Computes
 
-## Troubleshooting
+For each heterodyne order (0 through 12), the pipeline reports:
 
-**Issue: "gimpformats library can't read my XCF file"**
-- **Most common cause:** You're using GIMP 3.0 or have opened/saved the file in GIMP 3.0
-- Solution: Use GIMP 2.10.x exclusively. If a file was saved in GIMP 3.0, you may need to recreate it from scratch in GIMP 2.10
-- Verification: Check your GIMP version with `Help > About` in GIMP
+**Node-level metrics** (pixel-by-pixel mask comparison):
+- **IoU** (Intersection over Union) — overall spatial overlap between predicted and annotated masks
+- **Precision / Recall / F1** — TP/FP/FN per frequency bin
 
-**Issue: Template layer group has " copy" suffix and layers are locked**
-- Solution: Follow Step 3.4 carefully - rename the layer group to remove " copy" and uncheck all three lock options in the Switches tab
+**Contour-level metrics** (frequency trajectory comparison):
+- **Coverage** — percentage of annotated frames that matched a prediction
+- **Fragmentation** — measures discontinuity in matched regions
+- **Frequency Deviation** — mean absolute error on matched frames (Hz)
+- **Contour Recall / Precision** — percentage of frames within a frequency tolerance
 
-**Issue: Annotations are cropped, misaligned, or not appearing correctly**
-- **This is the most common issue!** 
-- Solution: You likely skipped Step 3.3 - Right-click layer group → `Layer to Image Size`
-- This step is **mandatory** for every project - layers must match spectrogram dimensions exactly
-- Verify: The colorful dashed border should perfectly outline your entire spectrogram
+### Outputs
 
-**Issue: Pencil not drawing**
-- Check tool settings: Size=1.0, Hardness=100, Force=100
-- Verify Apply Jitter is checked with Amount=0.00
-- Ensure you've selected the Pencil tool (not Paintbrush)
-- Verify you've clicked on a layer (not layer group)
-- Check that layers are unlocked (no lock icons in Layers panel)
+- **CSV file** with one row per heterodyne order, containing all metrics
+- **PNG visualizations** (unless `--no-plots`):
+  - Metrics bar chart (IoU and tolerance accuracy per order)
+  - Per-order contour overlay plots (predicted in cyan, annotated in magenta)
 
-**Issue: "I don't see the dashed border around my image"**
-- The layer group might not be selected. Click on `OrcinusOrca_FrequencyContours` in the Layers panel
-- The border (marching ants) appears when a layer is selected
+### How Heterodyne Orders Map to Layers
 
-**Issue: "Where is the Layers panel?"**
-- Go to `Windows > Dockable Dialogs > Layers` to make it visible
+| Heterodyne Layer | HFC Multiplier | Formula |
+|---|---|---|
+| `Heterodynes/0` | 1 (fundamental) | `1 * f_HFC +/- k * f_LFC` |
+| `Heterodynes/1` | 2 (1st harmonic) | `2 * f_HFC +/- k * f_LFC` |
+| `Heterodynes/N` | N+1 | `(N+1) * f_HFC +/- k * f_LFC` |
 
-**Issue: Colors look wrong in visualizations**
-- Delete `layer_color_mapping.json` to regenerate color assignments
-- Specify a master template XCF for consistent colors
+---
 
-**Issue: Python packages not found**
-- Ensure conda environment is activated: `conda activate spectrace`
-- Reinstall environment: `conda env remove -n spectrace` then `conda env create -f environment.yml`
+## Compatibility
 
-## Compatibility Notes
+| Component | Requirement |
+|-----------|-------------|
+| **GIMP** | 2.10.x only (NOT 3.0+) |
+| **Python** | 3.11 (via conda environment) |
+| **Operating Systems** | macOS, Linux (standard + Flatpak), Windows |
+| **gimpformats** | Only supports GIMP 2.10 XCF format |
+| **Plugin Python** | Uses GIMP 2.10's bundled Python 2.7 (separate from the conda environment) |
 
-- **GIMP Version:** Spectrace requires GIMP 2.10.x and is **not compatible** with GIMP 3.0 or later
-- **Python:** Tested with Python 3.8-3.11
-- **Operating Systems:** Linux, Windows, and macOS
-- **gimpformats library:** Only supports GIMP 2.10 XCF file format
+### File Formats
 
-## File Formats
+| Format | Purpose |
+|--------|---------|
+| **WAV** | Audio input (opened directly in GIMP via the plugin) |
+| **XCF** | GIMP's native format (v2.10), stores all layers and annotations |
+| **HDF5** | Hierarchical data format for ML pipelines |
+| **PNG** | Spectrogram images and visualization outputs |
+| **Excel** | Tabular export of contour data |
+| **PKL/CSV** | Project metadata |
 
-- **XCF**: GIMP's native format (v2.10), stores all layers and metadata
-- **HDF5**: Hierarchical data format for ML pipelines
-- **PNG**: Visualization outputs
-- **Excel**: Tabular export of contour data
-- **PKL/CSV**: Project metadata
+---
+
+## Uninstalling
+
+Run the uninstaller to remove the plugin and restore your original GIMP configuration:
+
+```bash
+python gimp_plugin/install.py --uninstall
+```
+
+This restores your original `gimprc`, `menurc`, `toolrc`, and `sessionrc` from the backups created during installation. Restart GIMP after uninstalling.
+
+To also remove the spectrace configuration:
+
+```bash
+rm -rf ~/.spectrace  # macOS/Linux
+```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and pull request guidelines.
