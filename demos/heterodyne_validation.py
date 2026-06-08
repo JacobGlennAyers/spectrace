@@ -1487,6 +1487,8 @@ def run_negative_control(
     max_k: int,
     kernel_size: int,
     output_dir: Optional[str],
+    pos_mae: float = float("nan"),
+    pos_acc: float = float("nan"),
 ) -> None:
     """Negative control: run the biphonic prediction formula on clips that
     have annotated f0_HFC and f0_LFC but NO drawn heterodynes, then measure
@@ -1663,7 +1665,9 @@ def run_negative_control(
           f"{int(weights.sum()):>9}")
     print(thick)
     print("  Compare against positive validation (all clips mean):")
-    print("    MAE 174 Hz  |  Acc@250Hz 74%")
+    pos_mae_s = f"{pos_mae:.0f} Hz" if not np.isnan(pos_mae) else "N/A"
+    pos_acc_s = f"{pos_acc:.0%}"    if not np.isnan(pos_acc) else "N/A"
+    print(f"    MAE {pos_mae_s}  |  Acc@250Hz {pos_acc_s}")
     print("  A substantially higher negative-control MAE and lower Acc@250Hz")
     print("  confirms the formula is specific to labelled heterodynes.")
     print(thick)
@@ -1799,8 +1803,29 @@ def main():
             else:
                 print(f"\nRunning negative control on "
                       f"{len(skipped_paths)} skipped clip(s)…")
+                # Derive positive-run summary metrics using the same
+                # mean-of-per-clip-means aggregation that print_validation_table
+                # uses for its ALL CLIPS row — a flat row mean gives a
+                # different number when clips have unequal numbers of orders.
+                pos_labelled = df[df["labelled_px"] > 0] if all_dfs else pd.DataFrame()
+                acc_col = ("ba_acc_250hz_fitted"
+                           if "ba_acc_250hz_fitted" in pos_labelled.columns
+                           else "ba_acc_200hz_fitted")
+                if not pos_labelled.empty:
+                    clip_mae_means = pos_labelled.groupby("clip")["ba_mae_hz_fitted"].mean()
+                    clip_acc_means = (
+                        pos_labelled.groupby("clip")[acc_col].mean()
+                        if acc_col in pos_labelled.columns
+                        else pd.Series(dtype=float)
+                    )
+                    pos_mae_val = float(clip_mae_means.mean())
+                    pos_acc_val = float(clip_acc_means.mean()) if not clip_acc_means.empty else float("nan")
+                else:
+                    pos_mae_val = float("nan")
+                    pos_acc_val = float("nan")
                 run_negative_control(
-                    skipped_paths, args.max_k, args.kernel_size, out_dir
+                    skipped_paths, args.max_k, args.kernel_size, out_dir,
+                    pos_mae=pos_mae_val, pos_acc=pos_acc_val,
                 )
 
 
