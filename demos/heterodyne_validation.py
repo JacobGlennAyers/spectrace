@@ -25,6 +25,7 @@ Usage (run from demos/ or from the repo root):
     python demos/heterodyne_validation.py --hdf5 ml_data/clip.hdf5
     python demos/heterodyne_validation.py --hdf5-dir ml_data/ --kernel-size 7 --max-k 3
     python demos/heterodyne_validation.py --hdf5 clip.hdf5 --no-plots
+    python demos/heterodyne_validation.py --hdf5-dir ml_data/ --estimate-max-k
 """
 
 import argparse
@@ -32,7 +33,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -124,20 +125,22 @@ assert PRIMARY_TOLERANCE_HZ in TOLERANCES_HZ, (
 
 
 # ---------------------------------------------------------------------------
-# Pre-scan helper
+# Pre-scan helpers
 # ---------------------------------------------------------------------------
 
-def get_valid_annotation_indices(hdf5_path: str) -> List[int]:
-    """Return annotation indices that are valid for heterodyne validation.
+def get_valid_annotation_indices(hdf5_path: str) -> Tuple[List[int], int]:
+    """Return (valid_indices, total_heterodyne_count) for a clip.
 
-    An index is valid when the annotator explicitly drew at least one
-    Heterodynes/N mask in that annotation set AND both f0_HFC and f0_LFC
-    are also drawn in that same set.
+    valid_indices: annotation indices that have drawn Heterodynes/N masks
+        AND both f0_HFC and f0_LFC in the same annotation set.
+    total_heterodyne_count: total number of non-empty Heterodynes/N masks
+        found across all valid annotation sets (one per order per set).
 
     Heterodynes/unsure is excluded by the regex: it has no defined order N
     and cannot be matched to any biphonic prediction.
     """
     valid_indices = []
+    total_het_count = 0
     try:
         with HDF5SpectrogramLoader(hdf5_path) as loader:
             class_names = loader.get_class_names()
@@ -147,16 +150,16 @@ def get_valid_annotation_indices(hdf5_path: str) -> List[int]:
                 if _HETERODYNE_CLASS_RE.match(name)
             ]
             if not het_class_names:
-                return []
+                return [], 0
 
             num_annotations = loader.get_num_annotations()
             for ann_idx in range(num_annotations):
-                has_het = any(
-                    loader.get_class_mask(name, ann_idx) is not None
+                drawn_hets = [
+                    name for name in het_class_names
+                    if loader.get_class_mask(name, ann_idx) is not None
                     and loader.get_class_mask(name, ann_idx).sum() > 0
-                    for name in het_class_names
-                )
-                if not has_het:
+                ]
+                if not drawn_hets:
                     continue
 
                 hfc_mask = loader.get_class_mask("f0_HFC", ann_idx)
@@ -175,10 +178,113 @@ def get_valid_annotation_indices(hdf5_path: str) -> List[int]:
                     continue
 
                 valid_indices.append(ann_idx)
+                total_het_count += len(drawn_hets)
 
     except Exception as exc:
         print(f"  WARNING: could not read {hdf5_path}: {exc}")
-    return valid_indices
+    return valid_indices, total_het_count
+
+
+def estimate_max_k_from_annotations(hdf5_path: str) -> dict:
+    """Estimate the maximum k drawn in any Heterodynes/N mask in a clip.
+
+    Each Heterodynes/N layer groups all +k/-k sidebands around one HFC
+    harmonic into a single mask. In any given time column, the number of
+    disconnected frequency bands present equals the number of distinct k
+    values drawn (both the +k and -k sideband for the same k typically
+    appear as separate blobs separated by the HFC harmonic frequency).
+
+    We count the maximum number of disconnected bands in any single column
+    across all Heterodynes/N masks and annotation sets. That count is the
+    empirical max_k present in the data.
+
+    Returns a dict with:
+        max_k_observed   : int  — the maximum band count seen in any column
+        k_distribution   : dict — {k_count: n_columns} across all masks
+        orders_with_data : list — which Heterodynes/N orders had drawn masks
+    """
+    k_counts: dict = {}
+    orders_with_data: List[int] = []
+
+    try:
+        with HDF5SpectrogramLoader(hdf5_path) as loader:
+            class_names = loader.get_class_names()
+            het_class_names = [n for n in class_names if _HETERODYNE_CLASS_RE.match(n)]
+            if not het_class_names:
+                return {"max_k_observed": 0, "k_distribution": {}, "orders_with_data": []}
+
+            for ann_idx in range(loader.get_num_annotations()):
+                for het_name in het_class_names:
+                    mask = loader.get_class_mask(het_name, ann_idx)
+                    if mask is None or mask.sum() == 0:
+                        continue
+
+                    order = int(het_name.split("/")[1])
+                    if order not in orders_with_data:
+                        orders_with_data.append(order)
+
+                    H, W = mask.shape
+                    for t in range(W):
+                        col = mask[:, t]
+                        if not col.any():
+                            continue
+                        # Count disconnected runs of active pixels in this column.
+                        # Each run is one sideband (one k value, one sign).
+                        # Gap threshold of >3 rows matches _labelled_bands_per_column.
+                        rows = np.where(col)[0]
+                        gaps = np.diff(rows)
+                        n_bands = int(np.sum(gaps > 3)) + 1
+                        k_counts[n_bands] = k_counts.get(n_bands, 0) + 1
+
+    except Exception as exc:
+        print(f"  WARNING: estimate_max_k could not read {hdf5_path}: {exc}")
+        return {"max_k_observed": 0, "k_distribution": {}, "orders_with_data": []}
+
+    max_k = max(k_counts.keys()) if k_counts else 0
+    return {
+        "max_k_observed": max_k,
+        "k_distribution": dict(sorted(k_counts.items())),
+        "orders_with_data": sorted(orders_with_data),
+    }
+
+
+def print_max_k_estimate(hdf5_dir: str) -> None:
+    """Scan all HDF5 files and report the empirical max_k across the dataset."""
+    hdf5_files = sorted(Path(hdf5_dir).glob("*.hdf5"))
+    if not hdf5_files:
+        print("No .hdf5 files found.")
+        return
+
+    print(f"\nEstimating max_k from annotations in {len(hdf5_files)} clip(s)…")
+    global_k_counts: dict = {}
+    global_max_k = 0
+    all_orders: set = set()
+
+    for f in hdf5_files:
+        result = estimate_max_k_from_annotations(str(f))
+        if result["max_k_observed"] == 0:
+            continue
+        clip_max = result["max_k_observed"]
+        global_max_k = max(global_max_k, clip_max)
+        all_orders.update(result["orders_with_data"])
+        for k, n in result["k_distribution"].items():
+            global_k_counts[k] = global_k_counts.get(k, 0) + n
+        print(f"  {Path(f).name:<50}  max_k={clip_max}  "
+              f"orders={result['orders_with_data']}")
+
+    if not global_k_counts:
+        print("  No heterodyne masks found.")
+        return
+
+    total_cols = sum(global_k_counts.values())
+    print(f"\n  Band count distribution across all clips ({total_cols} columns):")
+    for k in sorted(global_k_counts):
+        pct = global_k_counts[k] / total_cols * 100
+        bar = "█" * int(pct / 2)
+        print(f"    {k} band(s): {global_k_counts[k]:>7} columns  ({pct:5.1f}%)  {bar}")
+    print(f"\n  Heterodyne orders annotated: {sorted(all_orders)}")
+    print(f"  → Recommended max_k = {global_max_k}  "
+          f"(use this or lower based on the distribution above)")
 
 
 # ---------------------------------------------------------------------------
@@ -1328,6 +1434,10 @@ def main():
                         help="Positive-baseline variant to compare the negative "
                              "control against (default: full = strict like-for-like, "
                              "since the negative side uses the full fan).")
+    parser.add_argument("--estimate-max-k", action="store_true",
+                        help="Scan all HDF5 files and report the empirical max_k "
+                             "present in the annotations, then exit. "
+                             "Only valid with --hdf5-dir.")
     args = parser.parse_args()
 
     out_dir = None if args.no_plots else args.output_dir
@@ -1336,7 +1446,7 @@ def main():
         if not os.path.isfile(args.hdf5):
             print(f"ERROR: HDF5 file not found: {args.hdf5}")
             sys.exit(1)
-        valid_indices = get_valid_annotation_indices(args.hdf5)
+        valid_indices, _ = get_valid_annotation_indices(args.hdf5)
         if not valid_indices:
             print(f"ERROR: {args.hdf5} has no annotation set with drawn "
                   f"f0_HFC, f0_LFC, and at least one Heterodynes/N mask.")
@@ -1357,14 +1467,20 @@ def main():
             print(f"ERROR: No .hdf5 files found in {hdf5_dir}")
             sys.exit(1)
 
+        if args.estimate_max_k:
+            print_max_k_estimate(args.hdf5_dir)
+            sys.exit(0)
+
         print(f"Scanning {len(hdf5_files)} HDF5 file(s) for heterodyne annotations…")
         heterodyne_files = []
         skipped_paths: List[Path] = []
         skipped_names = []
+        total_het_count = 0
         for f in hdf5_files:
-            valid_indices = get_valid_annotation_indices(str(f))
+            valid_indices, het_count = get_valid_annotation_indices(str(f))
             if valid_indices:
                 heterodyne_files.append((f, valid_indices))
+                total_het_count += het_count
             else:
                 skipped_paths.append(f)
                 skipped_names.append(f.name)
@@ -1378,7 +1494,8 @@ def main():
 
         n_indices = sum(len(idxs) for _, idxs in heterodyne_files)
         print(f"  Found {len(heterodyne_files)} clip(s) with {n_indices} valid "
-              f"annotation set(s) — proceeding with validation.\n")
+              f"annotation set(s) and {total_het_count} annotated heterodyne "
+              f"contour(s) — proceeding with validation.\n")
 
         all_dfs = []
         for f, valid_indices in heterodyne_files:
