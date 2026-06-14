@@ -763,7 +763,7 @@ def main():
     p.add_argument("--neg-hdf5", default=None, help="null-control clip (no heterodynes)")
     p.add_argument("--neg-reference-layer", default=None,
                    help="force a reference layer for the negative control")
-    p.add_argument("--output-dir", default="figures")
+    p.add_argument("--output-dir", default="../figures")
     p.add_argument("--dpi", type=int, default=400)
     a = p.parse_args()
 
